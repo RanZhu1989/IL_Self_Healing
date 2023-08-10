@@ -6,132 +6,14 @@ struct OPF_Core
     expert_model
     step_model
     # 在一次任务中，OPF_Core只需初始化一次，关于系统的data在创建时输入，env.rest会产生a, 
-    function OPF_Core(;sys_file_name="Case_33BW_Data.xlsx", NT=5)
-        # TODO 输入应该是从Python传过来的，系统信息、NT，其他信息例如a,tieline0, X_rec0, X_tieline_input, Q_svc_input等则需要创建专门的修改函数，从python传过来
-
-        if NT > 1 && isa(NT, Int)
-            args_expert, args_step = read_data(sys_file_name, NT)
-            expert_model = make_expert_model(args_expert)
-            step_model = make_step_model(args_step)
-            new(expert_model, step_model)
-        else 
-            error("Invalid input: NT must be a positive integer greater than 1.")
-        end
-
+    function OPF_Core(args_expert, args_step)
+        expert = make_expert_model(args_expert)
+        step = make_step_model(args_step)
+        new(expert, step)
     end
 
 end
 
-
-
-function read_data(sys_file_name, NT)
-    # 读取并构建建模必须的数据
-
-    Sb = 100                   # MW/MVar/MVA
-    Vb = 12.66                # kV
-    Zb = Vb^2/Sb              # O
-    # Ib = Sb/(sqrt(3)*Vb)      # kA
-    V0 = 1                    # p.u.
-    V_max = 1.05
-    V_min = 0.95
-    Big_M_FF = 40             # 单商品流的BigM
-    Big_M_V = 3               # 压降松弛的BigM
-    BigM_SC = 2
-
-    # 从 Excel 文件读取数据
-    Bus_Data = XLSX.readtable(joinpath(@__DIR__,sys_file_name), "Bus")
-    Bus_Data = hcat(Bus_Data.data ...)
-
-    DG_Data = XLSX.readtable(joinpath(@__DIR__,sys_file_name), "DG")
-    DG_Data = hcat(DG_Data.data ...)
-
-    Branch_Data = XLSX.readtable(joinpath(@__DIR__,sys_file_name), "Branch")
-    Branch_Data = hcat(Branch_Data.data ...)
-
-
-    N_Bus = 33
-    Pd_Data = Bus_Data[:, 2] ./ Sb
-    Pd_Data_all = sum(Pd_Data)
-    Qd_Data = Bus_Data[:, 3] ./ Sb
-    Qd_Data_all = sum(Qd_Data)
-    Pd_ratio = Pd_Data ./ Pd_Data_all    # Active load ratio
-    Qd_ratio = Qd_Data ./ Qd_Data_all    # Reactive load ratio
-    
-
-    N_Branch = size(Branch_Data, 1)   
-    N_TL = sum(Branch_Data[:, 7] .== 1)                   # 需要增加tieline辨识
-    N_NL = sum(Branch_Data[:, 7] .== 0)
-    Branch_start = Branch_Data[:, 2]   # 每条线路的起点和终点
-    Branch_end = Branch_Data[:, 3]
-    # LS_Mask = MakeMask(N_Bus, N_Branch, Branch_start)
-    # LE_Mask = MakeMask(N_Bus, N_Branch, Branch_end)
-    pIn = MakeIncMatrix(Branch_start, Branch_end)   # 潮流方程专用  关联矩阵，node-branch incidence matrix  jk-ij
-    pInn = copy(pIn)
-    pInn[pInn .> 0] .= 0    # 潮流方程专用 Inn is the negative part of I   +ij
-    R_Branch0 = Branch_Data[:, 4] ./ Zb   # 线路阻抗
-    X_Branch0 = Branch_Data[:, 5] ./ Zb   # 线路电抗
-    # SZ_Branch0 = R_Branch0 .^ 2 + X_Branch0 .^ 2   # SOCP模型专用 线路阻抗模平方
-    S_Branch0 = Branch_Data[:, 6] ./ Sb
-
-    N_DG = size(DG_Data, 1)
-    DataDN_IndDG = DG_Data[:, 2]   # DG接入位置
-    DataDN_IndBSDG = DG_Data[findall(x -> x == 1, DG_Data[:, 7]), 2]   # DG中黑启动机组
-    # DataDN_IndNMDG = DG_Data[findall(x -> x == 0, DG_Data[:, 7]), 2]   # DG中非黑启动机组
-    N_BSDG = size(DataDN_IndBSDG, 1)
-    # N_NMDG = size(DataDN_IndNMDG, 1)
-    P_DG_max0 = DG_Data[:, 3] ./ Sb
-    P_DG_min0 = DG_Data[:, 4] ./ Sb
-    Q_DG_max0 = DG_Data[:, 5] ./ Sb
-    Q_DG_min0 = DG_Data[:, 6] ./ Sb
-    DG_Mask = MakeMask(N_Bus, N_DG, DataDN_IndDG)   # DG接入关联矩阵
-    BSDG_Mask = MakeMask(N_Bus, N_BSDG, DataDN_IndBSDG)   # BSDG接入关联矩阵
-    # NMDG_Mask = MakeMask(N_Bus, N_NMDG, DataDN_IndNMDG)   # Normal DG接入关联矩阵
-
-    load_pec = 1.0
-    Pd_all = Pd_Data_all * load_pec  # 负荷倍率
-    Qd_all = Qd_Data_all * load_pec
-    X_tieline0 = zeros(N_TL) # 这些是联络线起始状态
-    dmg_list = [6,11,29,32] # 先随便定义一个
-
-
-    Pd = Pd_all .* repeat(Pd_ratio, 1, NT)
-    Qd = Qd_all .* repeat(Qd_ratio,1,NT)
-
-    R_Branch = repeat(R_Branch0, 1, NT)
-    X_Branch = repeat(X_Branch0, 1, NT)
-    S_Branch = repeat(S_Branch0, 1, NT)
-
-
-    P_DG_max = repeat(P_DG_max0, 1, NT)
-    P_DG_min = repeat(P_DG_min0, 1, NT)
-    Q_DG_max = repeat(Q_DG_max0, 1, NT)
-    Q_DG_min = repeat(Q_DG_min0, 1, NT)
-
-    a = ones(N_NL, NT)  # 初始线路故障 a=0 线路故障，a=1线路正常
-    
-    # dmg_list = [11,21] # 这些是由env.rest输入的
-
-    a[dmg_list, :] .= 0
-
-
-    X_rec0 = zeros(33) # 这些是env.step上一步的负荷恢复结果
-
-    X_tieline_input = [1; 1; 1; 0; 0] # 这些是env.step输入的tieline动作
-
-    Q_svc_input = [0.002; 0.002; 0.000; 0.002; 0.002; 0.000] # 这些是env.step输入的svc动作
-    
-    args_expert = (NT, N_Branch, N_TL, N_NL, N_Bus, pIn, N_DG, DG_Mask, R_Branch, X_Branch, Big_M_V, V0,
-        V_min, V_max, Pd, Qd, S_Branch, P_DG_min, P_DG_max, Q_DG_min, Q_DG_max, BigM_SC, BSDG_Mask,
-        Big_M_FF, a, X_tieline0)
-
-    args_step = (1, N_Branch, N_TL, N_NL, N_Bus, pIn, N_DG, DG_Mask, R_Branch[:,1], X_Branch[:,1], Big_M_V, V0,
-        V_min, V_max, Pd[:,1], Qd[:,1], S_Branch[:,1], P_DG_min[:,1], P_DG_max[:,1], Q_DG_min[:,1],
-        Q_DG_max[:,1], BSDG_Mask, Big_M_FF, a[:,1], X_rec0, X_tieline_input, Q_svc_input)
-
-    return args_expert, args_step
-
-
-end
 
 function make_expert_model(args_expert)
 
@@ -139,7 +21,9 @@ function make_expert_model(args_expert)
         V_min, V_max, Pd, Qd, S_Branch, P_DG_min, P_DG_max, Q_DG_min, Q_DG_max, BigM_SC, BSDG_Mask,
         Big_M_FF, a_input, X_tieline0_input = args_expert
     
-    
+    println(pIn)
+    println(N_NL)
+    println(NT)
     expert_model = Model()
 
     # --- 需要经常改变的常量 ---
@@ -373,24 +257,33 @@ function make_step_model(args_step)
     return step_model
 end
 
-model = OPF_Core(sys_file_name="Case_33BW_Data.xlsx",NT=5)
-set_optimizer(model.expert_model, Gurobi.Optimizer) # 需要指定求解器
-set_optimizer(model.step_model, Gurobi.Optimizer)
-optimize!(model.expert_model)
-optimize!(model.step_model)
-
-
-# 以下为测试修改a (env.rest)后，专家模型的变化
-a_input = ones(32,5)
-dmg_list = [11,21] # 先随便定义一个
-a_input[dmg_list, :] .= 0
-
-# 注意这个循环，维度可以用size(a_input)来看
-
-for i in 1:size(a_input,1)
-    for j in 1:size(a_input,2)
-        fix(model.expert_model[:a][i,j], a_input[i,j]) # 注意提取变量的方法需要[:变量名]
-    end
+function make_opf(args_expert, args_step)
+    global model = OPF_Core(args_expert, args_step)
+    set_optimizer(model.expert_model, Gurobi.Optimizer) # 需要指定求解器
+    set_optimizer(model.step_model, Gurobi.Optimizer)
+    optimize!(model.expert_model)
+    # res_v = value.(model.expert_model[:V])
+    return objective_value(model.expert_model)
 end
 
-optimize!(model.expert_model)
+function opf()
+    global model
+    optimize!(model.expert_model)
+    # res_v = value.(model.expert_model[:V])
+    return objective_value(model.expert_model)
+end
+
+function mod_a(a_input)
+    global model
+    for i in 1:size(a_input,1)
+        for j in 1:size(a_input,2)
+            fix(model.expert_model[:a][i,j], a_input[i,j]) # 注意提取变量的方法需要[:变量名]
+        end
+    end
+    optimize!(model.expert_model)
+    return objective_value(model.expert_model)
+end
+
+
+
+

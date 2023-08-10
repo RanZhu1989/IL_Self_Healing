@@ -6,8 +6,6 @@ from julia import Main as jl
 
 jl.include("lp.jl") # 求解优化问题，并打印问题
 
-jl.include("add.jl") # 声明Julia函数的定义。python的数值传入julia，需要julia函数形式
-
 b = -1 # python给出的新约束条件参数
 c = 2
 d = 0
