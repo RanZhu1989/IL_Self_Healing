@@ -15,7 +15,7 @@ class System_Data():
         Big_M_V = 3               # 压降松弛的BigM
         BigM_SC = 2
         Vb = pd.read_excel(file_name,sheet_name='Base').to_numpy().item()       # kV
-        Sb = 1.0                # MW/MVar/MVA
+        Sb = 100                # MW/MVar/MVA
         # Ib = Sb/(math.sqrt(3)*Vb)   # kA
         Zb = Vb**2/Sb           # O
         

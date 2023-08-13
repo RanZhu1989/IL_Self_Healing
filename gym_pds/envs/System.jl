@@ -201,7 +201,7 @@ function make_step_model(args_step)
     @constraint(step_model, X_rec[1,:] .== 0)
     @constraint(step_model, Pd_rec .== X_rec .* Pd)
     @constraint(step_model, Qd_rec .== X_rec .* Qd)
-    @constraint(step_model, X_rec[:1] .>= X_rec0) # step版本 恢复的不能失去  X_rec0需要从外部输入 #NOTE X_rec0 需要在外部输入
+    @constraint(step_model, X_rec[:,1] .>= X_rec0) # step版本 恢复的不能失去  X_rec0需要从外部输入 #NOTE X_rec0 需要在外部输入
 
     # % 4. 线路
     @constraint(step_model, PF .>= -S_Branch .* b)
@@ -443,26 +443,43 @@ end
 
 function solve_StepModel()
     global core
+
+    solved_flag = false
+    
     optimize!(core.step_model)
 
     if termination_status(core.step_model) == MOI.OPTIMAL
-        return objective_value(core.step_model)
+        solved_flag = true
+        b = value.(core.step_model[:b][:,1])
+        x_tieline = value.(core.step_model[:X_tieline][:,1])
+        x_load = value.(core.step_model[:X_rec][:,1])
+        PF = value.(core.step_model[:PF][:,1])
+        QF = value.(core.step_model[:QF][:,1])
+        Prec = sum(value.(core.step_model[:Pd_rec]))
+        e_Qvsc = value.(sum(core.step_model[:e_Qsvc_up] .+ core.step_model[:e_Qsvc_down]))
+        
+        return solved_flag, b, x_tieline, x_load, PF, QF, Prec, e_Qvsc
+        
     else
-        return println("step model is infeasible")
-    end
+        println("step model is infeasible")
 
+        return solved_flag
+    end
 end
 
 
 function solve_ResetModel()
     global Core
+
     optimize!(core.reset_model)
+
     # 返回所有线路状态、所有负荷状态、所有线路PQ潮流
-    b = value.(core.reset_model[:b])
-    x_load = value.(core.reset_model[:X_rec][2:end,:])
-    PF = value.(core.reset_model[:PF])
-    QF = value.(core.reset_model[:QF])
+    b = value.(core.reset_model[:b][:,1])
+    x_tieline = value.(core.reset_model[:X_tieline][:,1])
+    x_load = value.(core.reset_model[:X_rec][:,1])
+    PF = value.(core.reset_model[:PF][:,1])
+    QF = value.(core.reset_model[:QF][:,1])
     Prec = sum(value.(core.reset_model[:Pd_rec]))
 
-    return b, x_load, PF, QF, Prec
+    return b, x_tieline, x_load, PF, QF, Prec
 end
