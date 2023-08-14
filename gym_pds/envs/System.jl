@@ -133,7 +133,7 @@ function make_expert_model(args_expert)
 
 
     # Obj
-    @objective(expert_model, Min, -sum(Pd_rec[:]) - 0.01*sum(X_line[:]) + 0.01*sum(delta_Qdg[:]))
+    @objective(expert_model, Min, -sum(Pd_rec[:]) - 0.01*sum(X_line[:]) + sum(delta_Qdg[:]))
 
     return expert_model
     
@@ -219,6 +219,7 @@ function make_step_model(args_step)
     @constraint(step_model, e_Qsvc .== e_Qsvc_up .- e_Qsvc_down) # 用于绝对值
     @constraint(step_model, e_Qsvc_up .>= 0)
     @constraint(step_model, e_Qsvc_down .>= 0)
+    # @constraint(step_model, e_Qsvc .== 0) #NOTE 测试严格等于用
 
     # ---------------Island----------------
     #  1. 一个节点为黑启动节点的条件：存在一个BSDG 
@@ -247,7 +248,7 @@ function make_step_model(args_step)
 
     
     # Obj
-    @objective(step_model, Min, -sum(Pd_rec[:]) - 0.01*sum(X_line[:]) + 0.01*sum(e_Qsvc_up .+ e_Qsvc_down))
+    @objective(step_model, Min, -sum(Pd_rec[:]) - 0.01*sum(X_line[:]) + 10*sum(e_Qsvc_up .+ e_Qsvc_down))
 
     return step_model
 end
@@ -356,14 +357,14 @@ function make_reset_model(args_step)
 end
 
 
-function init_opf_core(; args_expert, args_step, solver="CPLEX")
+function init_opf_core(; args_expert, args_step, solver="CPLEX", display=true)
 
     global core = OPF_Core(args_expert, args_step)
-
+    # NOTE MIP精度也在这里设置
     if solver == "CPLEX"
-        optimizer = optimizer_with_attributes(CPLEX.Optimizer,"CPXPARAM_ScreenOutput" => 1)
+        optimizer = optimizer_with_attributes(CPLEX.Optimizer,"CPXPARAM_ScreenOutput" => display)
     elseif solver == "Gurobi"
-        optimizer = optimizer_with_attributes(Gurobi.Optimizer,"output_flag" => true)
+        optimizer = optimizer_with_attributes(Gurobi.Optimizer,"output_flag" => display)
     else
         error("solver not supported")
     end
@@ -390,16 +391,27 @@ function set_dmg(a_input)
 
 end
 
-function set_tieline_init(X_tieline0_input)
+function set_ExpertModel(; X_tieline_input, vvo=true)
     # 设置tieline初始状态
     global core
-    for idx in eachindex(X_tieline0_input)
-        fix(core.expert_model[:X_tieline0][idx],X_tieline0_input[idx])
+
+    for idx in eachindex(X_tieline_input)
+        fix(core.expert_model[:X_tieline0][idx],X_tieline_input[idx])
+    end
+
+    if !vvo
+        for idx in eachindex(core.expert_model[:Q_dg][2:end])
+            fix(core.expert_model[:Q_dg][2:end][idx],0)
+        end
     end
 end
 
-function set_StepModel(; X_rec0_input,X_tieline_input,Q_svc_input)
+function set_StepModel(; X_rec0_input,X_tieline_input,Q_svc_input, vvo=true)
     # 为step模型输入上一步负荷状态、tieline指令、svc指令
+
+    if vvo && Q_svc_input === nothing
+        error("Please provide a value for Q_svc_input when vvo mode is set to true.")
+    end
 
     global core
     
@@ -412,7 +424,12 @@ function set_StepModel(; X_rec0_input,X_tieline_input,Q_svc_input)
     end
 
     for idx in eachindex(Q_svc_input)
-        fix(core.step_model[:Q_svc][idx],Q_svc_input[idx])
+        # 是否考虑svc的区别就在于是否接受输入
+        if vvo
+            fix(core.step_model[:Q_svc][idx],Q_svc_input[idx])
+        else
+            fix(core.step_model[:Q_svc][idx],0)
+        end
     end
     
 end

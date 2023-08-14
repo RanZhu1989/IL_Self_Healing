@@ -25,6 +25,7 @@ class System_Data():
         
         N_Bus = Bus_Data.shape[0]
         Pd_Data = Bus_Data[:, 1] / Sb
+        # self.rec_threshold = 0.5 * np.min(Pd_Data[Pd_Data>0])  # 0.1*min(Pd) 为恢复阈值
         Pd_Data_all = np.sum(Pd_Data)
         Qd_Data = Bus_Data[:, 2] / Sb
         Qd_Data_all = np.sum(Qd_Data)
@@ -92,6 +93,7 @@ class System_Data():
         self.Qsvc_upper_limit = Q_DG_max0[1:]
         self.Pd = Pd
         self.Qd = Qd
+        self.Pd_all = Pd_all
         
         
         
