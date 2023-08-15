@@ -63,8 +63,8 @@ function make_expert_model(args_expert)
     @constraint(expert_model, pIn * QF .== DG_Mask * Q_dg .- Qd_rec)
 
     # 2. Voltage : U_j - U_i = r*Q_ij + x*P_ij
-    @constraint(expert_model, pIn' * V .- R_Branch .* PF .- X_Branch .* QF .<= Big_M_V .* (1 .- b))
-    @constraint(expert_model, pIn' * V .- R_Branch .* PF .- X_Branch .* QF .>= -Big_M_V .* (1 .- b))
+    @constraint(expert_model, V0 .* (pIn' * V) .- R_Branch .* PF .- X_Branch .* QF .<= Big_M_V .* (1 .- b))
+    @constraint(expert_model, V0 .* (pIn' * V) .- R_Branch .* PF .- X_Branch .* QF .>= -Big_M_V .* (1 .- b))
     @constraint(expert_model, X_BS .+ X_EN .* V_min .- z_bs .* V_min .<= V)
     @constraint(expert_model, V .<= X_BS .* V0 .+ X_EN .* V_max .- z_bs .* V_max)
     @constraint(expert_model, z_bs .<= X_BS)
@@ -188,8 +188,8 @@ function make_step_model(args_step)
     @constraint(step_model, pIn * QF .== DG_Mask * Q_dg .- Qd_rec)
 
     # 2. Voltage : U_j - U_i = r*Q_ij + x*P_ij
-    @constraint(step_model, pIn' * V .- R_Branch .* PF .- X_Branch .* QF .<= Big_M_V .* (1 .- b))
-    @constraint(step_model, pIn' * V .- R_Branch .* PF .- X_Branch .* QF .>= -Big_M_V .* (1 .- b))
+    @constraint(step_model, V0 .* (pIn' * V) .- R_Branch .* PF .- X_Branch .* QF .<= Big_M_V .* (1 .- b))
+    @constraint(step_model, V0 .* (pIn' * V) .- R_Branch .* PF .- X_Branch .* QF .>= -Big_M_V .* (1 .- b))
     @constraint(step_model, X_BS .+ X_EN .* V_min .- z_bs .* V_min .<= V)
     @constraint(step_model, V .<= X_BS .* V0 .+ X_EN .* V_max .- z_bs .* V_max)
     @constraint(step_model, z_bs .<= X_BS)
@@ -295,8 +295,8 @@ function make_reset_model(args_step)
     @constraint(reset_model, pIn * QF .== DG_Mask * Q_dg .- Qd_rec)
 
     # 2. Voltage : U_j - U_i = r*Q_ij + x*P_ij
-    @constraint(reset_model, pIn' * V .- R_Branch .* PF .- X_Branch .* QF .<= Big_M_V .* (1 .- b))
-    @constraint(reset_model, pIn' * V .- R_Branch .* PF .- X_Branch .* QF .>= -Big_M_V .* (1 .- b))
+    @constraint(reset_model, V0 .* (pIn' * V) .- R_Branch .* PF .- X_Branch .* QF .<= Big_M_V .* (1 .- b))
+    @constraint(reset_model, V0 .* (pIn' * V) .- R_Branch .* PF .- X_Branch .* QF .>= -Big_M_V .* (1 .- b))
     @constraint(reset_model, X_BS .+ X_EN .* V_min .- z_bs .* V_min .<= V)
     @constraint(reset_model, V .<= X_BS .* V0 .+ X_EN .* V_max .- z_bs .* V_max)
     @constraint(reset_model, z_bs .<= X_BS)
