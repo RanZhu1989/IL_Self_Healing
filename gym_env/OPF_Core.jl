@@ -129,9 +129,6 @@ function make_expert_model(args_expert)
     @constraint(expert_model, sum(X_tieline[:, 2:NT] .- X_tieline[:, 1:NT-1], dims=1) .<= 1)
     @constraint(expert_model, sum(X_tieline[:, 1] .- X_tieline0, dims=1) .<= 1) #NOTE X_tieline0 需要在外部输入
 
-
-
-
     # Obj
     @objective(expert_model, Min, -sum(Pd_rec[:]) - 0.01*sum(X_line[:]) + sum(delta_Qdg[:]))
 
@@ -358,6 +355,8 @@ end
 
 
 function init_opf_core(; args_expert, args_step, solver="CPLEX", display=true)
+    """We can not use jl.OPF_Core() thourgh julia_python interface. 
+    Therefore we use this function to initialize the core."""
 
     global core = OPF_Core(args_expert, args_step)
     # NOTE MIP精度也在这里设置
@@ -391,12 +390,12 @@ function set_dmg(a_input)
 
 end
 
-function set_ExpertModel(; X_tieline_input, vvo=true)
+function set_ExpertModel(; X_tieline0_input, vvo=true)
     # 设置tieline初始状态
     global core
 
-    for idx in eachindex(X_tieline_input)
-        fix(core.expert_model[:X_tieline0][idx],X_tieline_input[idx])
+    for idx in eachindex(X_tieline0_input)
+        fix(core.expert_model[:X_tieline0][idx],X_tieline0_input[idx])
     end
 
     if !vvo
@@ -406,7 +405,7 @@ function set_ExpertModel(; X_tieline_input, vvo=true)
     end
 end
 
-function set_StepModel(; X_rec0_input,X_tieline_input,Q_svc_input, vvo=true)
+function set_StepModel(; X_rec0_input,X_tieline_input,Q_svc_input=nothing, vvo=true)
     # 为step模型输入上一步负荷状态、tieline指令、svc指令
 
     if vvo && Q_svc_input === nothing
@@ -423,7 +422,7 @@ function set_StepModel(; X_rec0_input,X_tieline_input,Q_svc_input, vvo=true)
         fix(core.step_model[:X_tieline][idx],X_tieline_input[idx])
     end
 
-    for idx in eachindex(Q_svc_input)
+    for idx in eachindex(core.step_model[:Q_svc])
         # 是否考虑svc的区别就在于是否接受输入
         if vvo
             fix(core.step_model[:Q_svc][idx],Q_svc_input[idx])
@@ -478,9 +477,7 @@ function solve_StepModel()
         return solved_flag, b, x_tieline, x_load, PF, QF, Prec, e_Qvsc
         
     else
-        println("step model is infeasible")
-
-        return solved_flag
+        return solved_flag, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing 
     end
 end
 
