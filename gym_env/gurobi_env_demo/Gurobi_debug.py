@@ -1,5 +1,5 @@
 
-from sys_data import System_Data
+from System_Data import *
 import numpy as np
 import gurobipy as gp
 from gurobipy import GRB
