@@ -1,21 +1,22 @@
 import gymnasium as gym
 from gymnasium import spaces
 from gymnasium.utils import seeding
-from System_Data import *
+from .System_Data import *
 from julia import Main as jl
 import os
 import numpy as np
 import random
+from typing import Optional, Tuple, Union 
 
-class SelfHealing_env(gym.Env):
-    metadata = {'render.modes': ['human']}
+class SelfHealing_Env(gym.Env):
+    metadata = {'render_modes': ['human']}
     def __init__(self, 
                  data_file:str, 
-                 solver:str="cplex", 
-                 solver_display:bool=False, 
-                 vvo:bool=True, 
-                 min_disturbance:int=1, 
-                 max_disturbance:int=1
+                 solver:str = "cplex", 
+                 solver_display:bool = False, 
+                 vvo:bool = True, 
+                 min_disturbance:int = 1, 
+                 max_disturbance:int = 1
                  ) -> None:
         """参数: 
         solver: 求解器,可选CPLEX或Gurobi
@@ -84,8 +85,23 @@ class SelfHealing_env(gym.Env):
         
         pass
     
-    def reset(self, disturbance:list=None, seed:int=None) -> (dict,dict):
+    def reset(self, 
+              options:dict,
+              seed:Optional[int] = None) -> Tuple[dict,dict]:
+        """
+        If you want to use a SPECIFIC disturbance, use this option.
+        options = {
+            "Specific_Disturbance": list of # of line, e.g: [6,11,29,32]
+        }
         
+        Otherwise, you should use the following option to generate a RANDOM disturbance:
+        options = {
+            "Specific_Disturbance": None
+        }
+        
+        !! WARNING: Given the list = [] does not mean random disturbance, it means the environment will be reset to the original state !!
+        """
+        disturbance = options["Specific_Disturbance"]
         # initialize a list to store the load status during an episode
         self.load_rate_episode = []
         
@@ -100,6 +116,7 @@ class SelfHealing_env(gym.Env):
             random.seed(seed)
         
         if disturbance == None:
+            random_mode = True
             temp_disturbance_set = self.system_data.disturbance_set.copy()
             # generate disturbance upper bound for this episoid   N-k的k
             num_disturbance = random.randint(self.min_disturbance, self.max_disturbance)
@@ -115,6 +132,7 @@ class SelfHealing_env(gym.Env):
                 temp_disturbance_set.remove(random_disturbance)
                 
         else:
+            random_mode = False
             num_disturbance = len(disturbance)
             self.disturbance = disturbance
             
@@ -161,7 +179,8 @@ class SelfHealing_env(gym.Env):
         
         # info返回当前episode case的属性
         info = {
-            "VVO_Mode": self.vvo,
+            "VVO_Enabled": self.vvo,
+            "Specific_Disturbance": not random_mode,
             "k of N-k": num_disturbance,
             "Disturbance_Set": self.disturbance,
             "Episode_Length": self.exploration_total+1,
@@ -170,7 +189,7 @@ class SelfHealing_env(gym.Env):
         
         return self.obs, info
     
-    def step(self, action:any) -> (dict, float, bool, dict):
+    def step(self, action:Union[dict,int]) -> Tuple[dict, float, bool, dict]:
         # step需要返回 observation, reward, terminated, truncated, info
         #                obs       reward     done       False      
         assert self.action_space.contains(action), "Invalid action. \n \
@@ -262,3 +281,12 @@ class SelfHealing_env(gym.Env):
         }
         
         return self.obs, reward, done, False, info
+    
+    def render(self):
+        #TODO Add visualization using NetworkX
+        pass
+    
+    
+    def close(self):
+        #NOTE I am not sure if it is necessary to kill the Julia process.
+        pass

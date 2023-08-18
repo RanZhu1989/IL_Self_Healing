@@ -2,3 +2,6 @@
 .vscode/
 __pycache__/
 tempCodeRunnerFile.python
+*egg-info
+dist
+build

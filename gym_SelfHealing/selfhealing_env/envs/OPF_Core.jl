@@ -1,5 +1,3 @@
-# 在python中指定求解器，并用eval来using
-
 using JuMP
 
 struct OPF_Core

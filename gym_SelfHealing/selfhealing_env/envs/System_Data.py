@@ -7,7 +7,7 @@ class System_Data():
                  Sb:float = 100, # MW/MVar/MVA
                  V0:float = 1.0, # p.u.
                  V_max:float = 1.05,
-                 V_min:float = 0.95):
+                 V_min:float = 0.95) -> None:
         # 初始化只放固定的数据
         Vb = pd.read_excel(file_name,sheet_name='Base').to_numpy().item()       # kV              # MW/MVar/MVA
         # Ib = Sb/(math.sqrt(3)*Vb)   # kA
