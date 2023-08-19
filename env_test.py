@@ -11,8 +11,8 @@ env = gym.make("SelfHealing-v0",
                max_disturbance=5, 
                vvo=False)
 reset_option = {
-    # "Specific_Disturbance": [6,11,29,32]
-    "Specific_Disturbance": None
+    "Specific_Disturbance": [6,11,29,32]
+    # "Specific_Disturbance": None
 }
 obs,info = env.reset(options=reset_option)
 # obs,info = env.reset(disturbance=[3,9,14,21,23])
@@ -24,10 +24,11 @@ action = {"Tieline":3,
         }
 action = 3
 
-obs, reward, _, _, info = env.step(action)
+obs, reward, done, _, info = env.step(action)
 print(reward)
 print(obs)
 print(info)
+print(done)
 
 
 action = {"Tieline":1,
@@ -35,30 +36,33 @@ action = {"Tieline":1,
         }
 action = 1
 
-obs, reward, _, _, info = env.step(action)
+obs, reward, done, _, info = env.step(action)
 print(reward)
 print(obs)
 print(info)
+print(done)
 
 action = {"Tieline":2,
           "Varcon": np.array([0, 0, 0, 0, 0,0], dtype=np.float32)
         }
 action = 2
 
-obs, reward, _, _, info = env.step(action)
+obs, reward, done, _, info = env.step(action)
 print(reward)
 print(obs)
 print(info)
+print(done)
 
 action = {"Tieline":4,
           "Varcon": np.array([0, 0, 0, 0, 0,0], dtype=np.float32)
         }
 action = 4
 
-obs, reward, _, _, info = env.step(action)
+obs, reward, done, _, info = env.step(action)
 print(reward)
 print(obs)
 print(info)
+print(done)
 
 action = {"Tieline":4,
           "Varcon": np.array([0, 0, 0, 0, 0,0], dtype=np.float32)

@@ -63,6 +63,13 @@ class SelfHealing_Env(gym.Env):
         """----------------------------------------"""
         
         # ---动作状态空间相关参数设置---
+        """ 
+        Take 33BW system with 5 tie-lies as an example. The agent has five step chances to take actions.
+        ----------------------------------------------------------------------------------------------
+            S1   -A1->   S2    -A2->   S3    -A3->    S4    -A4->    S5    -A5->   S6(terminal)
+         reset  step1        step2          step3          step4          step5       
+         ----------------------------------------------------------------------------------------------
+        """
         self.exploration_total = self.system_data.N_TL - 1
         self.exploration_seq_idx = [i for i in range(self.exploration_total + 1)]
         
@@ -177,6 +184,10 @@ class SelfHealing_Env(gym.Env):
         self.load_rate_episode.append(load_rate_current) # 添加到该episode的得分记录表中
         self._x_nl = np.round(_b[0:self.system_data.N_NL-1]).astype(int) # 保存普通线路的状态，用于判断step的拓扑是否可行
         
+        """---------------------求解Expert模型,返回结果----------------------"""
+        
+        
+        
         # info返回当前episode case的属性
         info = {
             "VVO_Enabled": self.vvo,
@@ -188,6 +199,7 @@ class SelfHealing_Env(gym.Env):
         }
         
         return self.obs, info
+    
     
     def step(self, action:Union[dict,int]) -> Tuple[dict, float, bool, dict]:
         # step需要返回 observation, reward, terminated, truncated, info
@@ -210,72 +222,76 @@ class SelfHealing_Env(gym.Env):
             q_svc_input = None
         
         # ===================== determine termination condition and rewards =====================
-        # first check if this is the last step in this episode
-        if self.exploration_index >= self.exploration_total:
-            done = True  # we are done with this episode
-            reward = 0
-        else:
-            done = False
-        
-        # =====================  solve for load status =====================
-        """-------------------将动作输入到环境模型并求解----------------------"""
-        #TODO Add Gurobipy env support : Setup & Solve step model
-        jl.set_StepModel(X_rec0_input=self._x_load, X_tieline_input=x_tieline_input, 
-                         Q_svc_input=q_svc_input, vvo=self.vvo)
-        results = jl.solve_StepModel()
-        """----------------------------------------------------------------"""
-        # 若无解，说明tieline合不上, tieline状态不变，reward为-1000
         event_log = None
-        success = False
-        solved, _b, _x_tieline, _x_load, _PF, _QF, load_value_new, e_Qvsc = results
-        if not solved:
-            event_log = "Infeasible Tieline Action"
-            reward = -1000
-            self.load_rate_episode.append(self.load_rate_episode[-1]) # 负荷不回复，保持上一步状态
-        else:
-            # 还需要记录上一步的负荷拾取情况、总负荷恢复量、tieline状态
-            _x_nl = np.round(_b[0:self.system_data.N_NL-1]).astype(int)
-            flag_x_nl = np.any(_x_nl<self._x_nl) # 普通线路状态不同，说明拓扑不可行，违反辐射状，
-            flag_e_Qvsc = e_Qvsc >= 1e-4 # svc指令误差大于1e-4，说明svc指令不可行
-            if flag_x_nl: # 拓扑不可行
-                event_log = "Infeasible Topology"
-                reward = -1000 
+        action_accepted = False
+        # first check if this is the last step in this episode
+        if self.exploration_index <= self.exploration_total:
+            if self.exploration_index == self.exploration_total:
+                done = True
+            else:
+                done = False
+            # =====================  solve for load status =====================
+            """-------------------将动作输入到环境模型并求解----------------------"""
+            #TODO Add Gurobipy env support : Setup & Solve step model
+            jl.set_StepModel(X_rec0_input=self._x_load, X_tieline_input=x_tieline_input, 
+                            Q_svc_input=q_svc_input, vvo=self.vvo)
+            results = jl.solve_StepModel()
+            """----------------------------------------------------------------"""
+            # 若无解，说明tieline合不上, tieline状态不变，reward为-1000
+
+            solved, _b, _x_tieline, _x_load, _PF, _QF, load_value_new, e_Qvsc = results
+            if not solved:
+                event_log = "Infeasible Tieline Action"
+                reward = -1000
                 self.load_rate_episode.append(self.load_rate_episode[-1]) # 负荷不回复，保持上一步状态
-            elif flag_e_Qvsc: # svc指令不可行
-                event_log = "Infeasible SVC Scheduling"
-                reward = -500
-                self.load_rate_episode.append(self.load_rate_episode[-1])
-            else: # 有效action
-                # 因为负荷被拾取后不会再失去，所以至少是上一步的负荷恢复量
-                success = True
-                load_rate_new = load_value_new / self.system_data.Pd_all
-                if load_rate_new-self.load_rate_episode[-1]>=1e-4:
-                    event_log = "Increased Load Recovery"
-                    reward = 150
-                else:
-                    event_log = "Maintained Load Recovery"
-                    reward = -10
-                                
-                self._x_nl = _x_nl # 保存普通线路的状态，用于判断step的拓扑是否可行
-                self._x_tieline = np.round(_x_tieline).astype(int)
-                self._x_load = np.round(_x_load).astype(np.int8)
-                self.load_rate_episode.append(load_rate_new) # 添加到该episode的得分记录表中
-                
-                if self.vvo:
-                    self.obs = {"X_branch": np.round(_b).astype(np.int8),
-                                "X_load": self._x_load,
-                                "PF": _PF.astype(np.float32),
-                                "QF": _QF.astype(np.float32)
-                                }
-                else:
-                    self.obs = np.round(_b).astype(np.int8)
+            else:
+                # 还需要记录上一步的负荷拾取情况、总负荷恢复量、tieline状态
+                _x_nl = np.round(_b[0:self.system_data.N_NL-1]).astype(int)
+                flag_x_nl = np.any(_x_nl<self._x_nl) # 普通线路状态不同，说明拓扑不可行，违反辐射状，
+                flag_e_Qvsc = e_Qvsc >= 1e-4 # svc指令误差大于1e-4，说明svc指令不可行
+                if flag_x_nl: # 拓扑不可行
+                    event_log = "Infeasible Topology"
+                    reward = -1000 
+                    self.load_rate_episode.append(self.load_rate_episode[-1]) # 负荷不回复，保持上一步状态
+                elif flag_e_Qvsc: # svc指令不可行
+                    event_log = "Infeasible SVC Scheduling"
+                    reward = -500
+                    self.load_rate_episode.append(self.load_rate_episode[-1])
+                else: # 有效action
+                    # 因为负荷被拾取后不会再失去，所以至少是上一步的负荷恢复量
+                    action_accepted = True
+                    load_rate_new = load_value_new / self.system_data.Pd_all
+                    if load_rate_new-self.load_rate_episode[-1]>=1e-4:
+                        event_log = "Increased Load Recovery"
+                        reward = 150
+                    else:
+                        event_log = "Maintained Load Recovery"
+                        reward = -10
+                                    
+                    self._x_nl = _x_nl # 保存普通线路的状态，用于判断step的拓扑是否可行
+                    self._x_tieline = np.round(_x_tieline).astype(int)
+                    self._x_load = np.round(_x_load).astype(np.int8)
+                    self.load_rate_episode.append(load_rate_new) # 添加到该episode的得分记录表中
+                    
+                    if self.vvo:
+                        self.obs = {"X_branch": np.round(_b).astype(np.int8),
+                                    "X_load": self._x_load,
+                                    "PF": _PF.astype(np.float32),
+                                    "QF": _QF.astype(np.float32)
+                                    }
+                    else:
+                        self.obs = np.round(_b).astype(np.int8)
+        else:
+            done = True
+            event_log = "Episode Closed"
+            reward = 0
                     
         # update index
         self.exploration_index += 1
         
         info = {"Attempted_Tieline_Action": action_tieline,
-                "State_Transform": success,
-                "Current_Step": self.exploration_index,
+                "Action_Accepted": action_accepted,
+                "Interaction_Step": self.exploration_index,
                 "Event_Log": event_log,
                 "Recovered_Load_Rate": self.load_rate_episode[-1]
         }

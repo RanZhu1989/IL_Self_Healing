@@ -448,8 +448,10 @@ end
 
 
 function solve_ExpertModel()
+
     global core
     optimize!(core.expert_model)
+    b = value.(core.step_model[:b])
 
     return objective_value(core.expert_model)
 
