@@ -63,7 +63,7 @@ function make_expert_model(args_expert)
     # 2. Voltage : U_j - U_i = r*Q_ij + x*P_ij
     @constraint(expert_model, V0 .* (pIn' * V) .- R_Branch .* PF .- X_Branch .* QF .<= Big_M_V .* (1 .- b))
     @constraint(expert_model, V0 .* (pIn' * V) .- R_Branch .* PF .- X_Branch .* QF .>= -Big_M_V .* (1 .- b))
-    @constraint(expert_model, X_BS .+ X_EN .* V_min .- z_bs .* V_min .<= V)
+    @constraint(expert_model, V0 .* X_BS .+ X_EN .* V_min .- z_bs .* V_min .<= V)
     @constraint(expert_model, V .<= X_BS .* V0 .+ X_EN .* V_max .- z_bs .* V_max)
     @constraint(expert_model, z_bs .<= X_BS)
     @constraint(expert_model, z_bs .<= X_EN)
@@ -109,7 +109,7 @@ function make_expert_model(args_expert)
     @constraint(expert_model, X_BS .- 1 .<= 1 .- z_bs2)
     @constraint(expert_model, X_EN .- X_BS .>= -Big_M_FF .* (1 .- z_bs2))
     @constraint(expert_model, X_EN .- X_BS .<= Big_M_FF .* (1 .- z_bs2))
-    @constraint(expert_model, z_bs1 .+ z_bs2 .== 1 )
+    @constraint(expert_model, z_bs1 .+ z_bs2 .== 1)
 
     # % 3. 商品流与线路状态
     @constraint(expert_model, -Big_M_FF .* b .<= FF)
@@ -185,7 +185,7 @@ function make_step_model(args_step)
     # 2. Voltage : U_j - U_i = r*Q_ij + x*P_ij
     @constraint(step_model, V0 .* (pIn' * V) .- R_Branch .* PF .- X_Branch .* QF .<= Big_M_V .* (1 .- b))
     @constraint(step_model, V0 .* (pIn' * V) .- R_Branch .* PF .- X_Branch .* QF .>= -Big_M_V .* (1 .- b))
-    @constraint(step_model, X_BS .+ X_EN .* V_min .- z_bs .* V_min .<= V)
+    @constraint(step_model, V0 .* X_BS .+ X_EN .* V_min .- z_bs .* V_min .<= V)
     @constraint(step_model, V .<= X_BS .* V0 .+ X_EN .* V_max .- z_bs .* V_max)
     @constraint(step_model, z_bs .<= X_BS)
     @constraint(step_model, z_bs .<= X_EN)
@@ -292,7 +292,7 @@ function make_reset_model(args_step)
     # 2. Voltage : U_j - U_i = r*Q_ij + x*P_ij
     @constraint(reset_model, V0 .* (pIn' * V) .- R_Branch .* PF .- X_Branch .* QF .<= Big_M_V .* (1 .- b))
     @constraint(reset_model, V0 .* (pIn' * V) .- R_Branch .* PF .- X_Branch .* QF .>= -Big_M_V .* (1 .- b))
-    @constraint(reset_model, X_BS .+ X_EN .* V_min .- z_bs .* V_min .<= V)
+    @constraint(reset_model, V0 .* X_BS .+ X_EN .* V_min .- z_bs .* V_min .<= V)
     @constraint(reset_model, V .<= X_BS .* V0 .+ X_EN .* V_max .- z_bs .* V_max)
     @constraint(reset_model, z_bs .<= X_BS)
     @constraint(reset_model, z_bs .<= X_EN)
@@ -397,8 +397,8 @@ function set_ExpertModel(; X_tieline0_input, vvo=true)
     end
 
     if !vvo
-        for idx in eachindex(core.expert_model[:Q_dg][2:end])
-            fix(core.expert_model[:Q_dg][2:end][idx],0)
+        for idx in eachindex(core.expert_model[:Q_dg][2:end,:])
+            fix(core.expert_model[:Q_dg][2:end,:][idx],0)
         end
     end
 end
@@ -451,9 +451,15 @@ function solve_ExpertModel()
 
     global core
     optimize!(core.expert_model)
-    b = value.(core.step_model[:b])
 
-    return objective_value(core.expert_model)
+    b = value.(core.expert_model[:b])
+    x_tieline = value.(core.expert_model[:X_tieline])
+    x_load = value.(core.expert_model[:X_rec])
+    Pg = value.(core.expert_model[:P_dg])
+    Qg = value.(core.expert_model[:Q_dg])
+    Prec = sum(value.(core.expert_model[:Pd_rec]),dims=1)
+
+    return b, x_tieline, x_load, Pg, Qg, Prec
 
 end
 

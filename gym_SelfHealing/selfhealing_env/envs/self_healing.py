@@ -70,7 +70,7 @@ class SelfHealing_Env(gym.Env):
          reset  step1        step2          step3          step4          step5       
          ----------------------------------------------------------------------------------------------
         """
-        self.exploration_total = self.system_data.N_TL - 1
+        self.exploration_total = self.system_data.N_TL
         self.exploration_seq_idx = [i for i in range(self.exploration_total + 1)]
         
         if self.vvo:
@@ -86,29 +86,30 @@ class SelfHealing_Env(gym.Env):
                 "QF": spaces.Box(low=self.system_data.S_lower_limit, high=self.system_data.S_upper_limit)
                 })
         else:
-            # 如果只用tieline
             self.action_space = spaces.Discrete(self.system_data.N_TL + 1)
             self.observation_space = spaces.MultiBinary(self.system_data.N_Branch) 
         
         pass
     
     def reset(self, 
-              options:dict,
+              options:dict = {"Specific_Disturbance": None, "Expert_Policy_Required": False},
               seed:Optional[int] = None) -> Tuple[dict,dict]:
         """
-        If you want to use a SPECIFIC disturbance, use this option.
         options = {
-            "Specific_Disturbance": list of # of line, e.g: [6,11,29,32]
-        }
+            "Specific_Disturbance": list or None
+            "Expert_Policy_Required": bool
+            }
+        
+        If you want to use a SPECIFIC disturbance, use the following option:
+        "Specific_Disturbance": list of # of line, e.g: [6,11,29,32]
         
         Otherwise, you should use the following option to generate a RANDOM disturbance:
-        options = {
-            "Specific_Disturbance": None
-        }
+        "Specific_Disturbance": None
         
         !! WARNING: Given the list = [] does not mean random disturbance, it means the environment will be reset to the original state !!
         """
         disturbance = options["Specific_Disturbance"]
+        expert_policy_required = options["Expert_Policy_Required"]
         # initialize a list to store the load status during an episode
         self.load_rate_episode = []
         
@@ -147,6 +148,8 @@ class SelfHealing_Env(gym.Env):
         a = np.ones((self.system_data.N_NL, self.system_data.NT)) # 设置普通线路的灾害状态
         for dmg in self.disturbance:
             a[dmg-1, :] = 0
+            
+        self.a = a
         
         X_tieline0 = np.zeros(self.system_data.N_TL) # tieline默认一开始都是打开的
         Q_svc0 = np.zeros(self.system_data.N_DG-1) # svc默认输出均为0
@@ -159,7 +162,7 @@ class SelfHealing_Env(gym.Env):
         # 目标是为每个模型设置N-k受损状态; 为Expert和Reset模型设置初始TieLine; 为Reset模型设置初始Q_svc
         """
         #TODO Add Gurobipy env support : Reset env models according to the disturbance
-        jl.set_dmg(a) # 对模型设置普通线路的灾害状态
+        jl.set_dmg(self.a) # 对模型设置普通线路的灾害状态
         jl.set_ExpertModel(X_tieline0_input=X_tieline0,vvo=self.vvo) # 设置Expert模型的初始状态
         jl.set_ResetModel(X_tieline_input=X_tieline0, Q_svc_input=Q_svc0)
         """----------------------------------------"""
@@ -171,20 +174,45 @@ class SelfHealing_Env(gym.Env):
         
         self._x_load = np.round(_x_load).astype(np.int8) # 还需要用self记录上一步的负荷拾取情况、总负荷恢复量、tieline状态
         if self.vvo:
-            self.obs = {"X_branch": np.round(_b).astype(np.int8),
+            self.obs = {"X_branch": np.concatenate((self.a[:,0].flatten(),_x_tieline)).astype(np.int8), # 注意实际上普通线路是不会断开的
                 "X_load": self._x_load,
                 "PF": _PF.astype(np.float32),
                 "QF": _QF.astype(np.float32)
                 }
         else:
-            self.obs = np.round(_b).astype(np.int8)
+            self.obs = np.concatenate((self.a[:,0].flatten(),_x_tieline)).astype(np.int8) # 注意实际上普通线路是不会断开的
         
-        self._x_tieline = np.round(_x_tieline).astype(int)
+        self._x_tieline = np.round(_x_tieline).astype(np.int8)
         load_rate_current = load_value_current / self.system_data.Pd_all
         self.load_rate_episode.append(load_rate_current) # 添加到该episode的得分记录表中
-        self._x_nl = np.round(_b[0:self.system_data.N_NL-1]).astype(int) # 保存普通线路的状态，用于判断step的拓扑是否可行
+        self._x_nl = np.round(_b[0:self.system_data.N_NL-1]).astype(np.int8) # 保存普通线路的状态，用于判断step的拓扑是否可行
         
         """---------------------求解Expert模型,返回结果----------------------"""
+        # 在reset的同时就可以求解Expert模型
+        
+        if expert_policy_required:
+            expert_b, expert_x_tieline, expert_x_load, \
+                expert_Pg, expert_Qg, load_value_expert = jl.solve_ExpertModel()
+                
+            expert_b = np.round(expert_b).astype(np.int8)
+            expert_x_tieline = np.round(expert_x_tieline).astype(np.int8)
+            expert_x_load = np.round(expert_x_load).astype(np.int8)
+            expert_P_sub = expert_Pg[0,:]
+            expert_Q_sub = expert_Qg[0,:]
+            expert_Q_svc = expert_Qg[1:,:]
+            load_value_expert = load_value_expert.flatten()
+            expert_load_rate = load_value_expert / np.sum(self.system_data.Pd, axis=0)
+            
+            expert_policy = {"Branch_Energized": expert_b,
+                             "Load_Energized": expert_x_load,
+                             "TieLine_Action": expert_x_tieline,
+                             "P_sub": expert_P_sub,
+                             "Q_sub": expert_Q_sub,
+                             "Q_svc": expert_Q_svc,
+                             "Load_Rate": expert_load_rate}
+            
+        else:
+            expert_policy = None
         
         
         
@@ -195,7 +223,9 @@ class SelfHealing_Env(gym.Env):
             "k of N-k": num_disturbance,
             "Disturbance_Set": self.disturbance,
             "Episode_Length": self.exploration_total+1,
-            "Recovered_Load_Rate": load_rate_current
+            "Recovered_Load_Rate_S0": load_rate_current,
+            "Expert_Policy_Required": expert_policy_required,
+            "Expert_Policy": expert_policy
         }
         
         return self.obs, info
@@ -246,7 +276,7 @@ class SelfHealing_Env(gym.Env):
                 self.load_rate_episode.append(self.load_rate_episode[-1]) # 负荷不回复，保持上一步状态
             else:
                 # 还需要记录上一步的负荷拾取情况、总负荷恢复量、tieline状态
-                _x_nl = np.round(_b[0:self.system_data.N_NL-1]).astype(int)
+                _x_nl = np.round(_b[0:self.system_data.N_NL-1]).astype(np.int8)
                 flag_x_nl = np.any(_x_nl<self._x_nl) # 普通线路状态不同，说明拓扑不可行，违反辐射状，
                 flag_e_Qvsc = e_Qvsc >= 1e-4 # svc指令误差大于1e-4，说明svc指令不可行
                 if flag_x_nl: # 拓扑不可行
@@ -269,18 +299,18 @@ class SelfHealing_Env(gym.Env):
                         reward = -10
                                     
                     self._x_nl = _x_nl # 保存普通线路的状态，用于判断step的拓扑是否可行
-                    self._x_tieline = np.round(_x_tieline).astype(int)
+                    self._x_tieline = np.round(_x_tieline).astype(np.int8)
                     self._x_load = np.round(_x_load).astype(np.int8)
                     self.load_rate_episode.append(load_rate_new) # 添加到该episode的得分记录表中
                     
                     if self.vvo:
-                        self.obs = {"X_branch": np.round(_b).astype(np.int8),
+                        self.obs = {"X_branch": np.concatenate((self.a[:,0].flatten(),self._x_tieline)).astype(np.int8),
                                     "X_load": self._x_load,
                                     "PF": _PF.astype(np.float32),
                                     "QF": _QF.astype(np.float32)
                                     }
                     else:
-                        self.obs = np.round(_b).astype(np.int8)
+                        self.obs = np.concatenate((self.a[:,0].flatten(),self._x_tieline)).astype(np.int8)
         else:
             done = True
             event_log = "Episode Closed"

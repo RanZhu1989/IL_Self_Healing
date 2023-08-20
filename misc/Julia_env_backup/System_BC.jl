@@ -191,13 +191,13 @@ function make_expert_model(args_expert)
     @constraint(expert_model, pIn * QF .== DG_Mask * Q_dg .- Qd_rec)
 
     # 2. Voltage : U_j - U_i = r*Q_ij + x*P_ij
-    @constraint(expert_model, pIn' * V .- R_Branch .* PF .- X_Branch .* QF .<= Big_M_V .* (ones(size(b)) .- b))
-    @constraint(expert_model, pIn' * V .- R_Branch .* PF .- X_Branch .* QF .>= -Big_M_V .* (ones(size(b)) .- b))
-    @constraint(expert_model, X_BS .+ X_EN .* V_min .- z_bs .* V_min .<= V)
+    @constraint(expert_model, pIn' * V .- R_Branch .* PF .- X_Branch .* QF .<= Big_M_V .* (1 .- b))
+    @constraint(expert_model, pIn' * V .- R_Branch .* PF .- X_Branch .* QF .>= -Big_M_V .* (1 .- b))
+    @constraint(expert_model, V0 .* X_BS .+ X_EN .* V_min .- z_bs .* V_min .<= V)
     @constraint(expert_model, V .<= X_BS .* V0 .+ X_EN .* V_max .- z_bs .* V_max)
     @constraint(expert_model, z_bs .<= X_BS)
     @constraint(expert_model, z_bs .<= X_EN)
-    @constraint(expert_model, z_bs .>= X_BS .+ X_EN .- ones(size(X_BS)))
+    @constraint(expert_model, z_bs .>= X_BS .+ X_EN .- 1)
 
     # 3. % 3. Load Curtailments
     @constraint(expert_model, X_rec .<= X_EN)
@@ -219,9 +219,9 @@ function make_expert_model(args_expert)
     @constraint(expert_model, Q_dg .<= (DG_Mask'*X_EN) .* Q_DG_max)
 
     # 由于是固定时间断面，针对SVC可能存在多解
-    @constraint(expert_model, BigM_SC .* (ones(size(z_dg)) .- z_dg) .<= Q_dg[2:N_DG,2:NT] .- Q_dg[2:N_DG,1:NT-1])
-    @constraint(expert_model, -BigM_SC .* (ones(size(z_dg)) .- z_dg) .<= delta_Qdg .- (Q_dg[2:N_DG,2:NT] .- Q_dg[2:N_DG,1:NT-1]))
-    @constraint(expert_model, BigM_SC .* (ones(size(z_dg)) .- z_dg) .>= delta_Qdg .- (Q_dg[2:N_DG,2:NT] .- Q_dg[2:N_DG,1:NT-1]))
+    @constraint(expert_model, BigM_SC .* (1 .- z_dg) .<= Q_dg[2:N_DG,2:NT] .- Q_dg[2:N_DG,1:NT-1])
+    @constraint(expert_model, -BigM_SC .* (1 .- z_dg) .<= delta_Qdg .- (Q_dg[2:N_DG,2:NT] .- Q_dg[2:N_DG,1:NT-1]))
+    @constraint(expert_model, BigM_SC .* (1 .- z_dg) .>= delta_Qdg .- (Q_dg[2:N_DG,2:NT] .- Q_dg[2:N_DG,1:NT-1]))
     @constraint(expert_model, -BigM_SC .* z_dg .<= delta_Qdg .+ (Q_dg[2:N_DG,2:NT] .- Q_dg[2:N_DG,1:NT-1]))
     @constraint(expert_model, BigM_SC .* z_dg .>= delta_Qdg .+ (Q_dg[2:N_DG,2:NT] .- Q_dg[2:N_DG,1:NT-1]))
 
@@ -230,16 +230,16 @@ function make_expert_model(args_expert)
     @constraint(expert_model, X_BS .<= repeat(sum(BSDG_Mask,dims=2),1,NT))
 
     # % 2. 每个孤岛是联通的。根据节点是否为黑启动节点，分为两种情况讨论
-    @constraint(expert_model, pIn * FF .+ X_EN .<= Big_M_FF .* (ones(size(z_bs1)) .- z_bs1))
-    @constraint(expert_model, pIn * FF .+ X_EN .>= -Big_M_FF .* (ones(size(z_bs1)) .- z_bs1))
-    @constraint(expert_model, z_bs1 .- ones(size(z_bs1)) .<= X_BS)
-    @constraint(expert_model, X_BS .<= ones(size(z_bs1)) .- z_bs1)
-    @constraint(expert_model, pIn * FF .>= -Big_M_FF .* (ones(size(z_bs2)) .- z_bs2))
-    @constraint(expert_model, z_bs2 .- ones(size(z_bs2)) .<= X_BS .- ones(size(X_BS)))
-    @constraint(expert_model, X_BS .- ones(size(X_BS)) .<= ones(size(z_bs2)) .- z_bs2)
-    @constraint(expert_model, X_EN .- X_BS .>= -Big_M_FF .* (ones(size(z_bs2)) .- z_bs2))
-    @constraint(expert_model, X_EN .- X_BS .<= Big_M_FF .* (ones(size(z_bs2)) .- z_bs2))
-    @constraint(expert_model, z_bs1 .+ z_bs2 .== ones(size(z_bs2)) )
+    @constraint(expert_model, pIn * FF .+ X_EN .<= Big_M_FF .* (1 .- z_bs1))
+    @constraint(expert_model, pIn * FF .+ X_EN .>= -Big_M_FF .* (1 .- z_bs1))
+    @constraint(expert_model, z_bs1 .- 1 .<= X_BS)
+    @constraint(expert_model, X_BS .<= 1 .- z_bs1)
+    @constraint(expert_model, pIn * FF .>= -Big_M_FF .* (1 .- z_bs2))
+    @constraint(expert_model, z_bs2 .- 1 .<= X_BS .- 1)
+    @constraint(expert_model, X_BS .- 1 .<= 1 .- z_bs2)
+    @constraint(expert_model, X_EN .- X_BS .>= -Big_M_FF .* (1 .- z_bs2))
+    @constraint(expert_model, X_EN .- X_BS .<= Big_M_FF .* (1 .- z_bs2))
+    @constraint(expert_model, z_bs1 .+ z_bs2 .== 1)
 
     # % 3. 商品流与线路状态
     @constraint(expert_model, -Big_M_FF .* b .<= FF)
@@ -248,13 +248,13 @@ function make_expert_model(args_expert)
     @constraint(expert_model, X_line .<= a ) #NOTE a 需要在外部输入 这个仅在env.rest才需要
 
     #  4. 闭合的边数=总节点数-带电孤岛数-不带电孤立节点数
-    @constraint(expert_model, sum(b, dims=1) .== N_Bus .- sum(X_BS, dims=1) .- sum(ones(size(X_EN)) .- X_EN, dims=1))
+    @constraint(expert_model, sum(b, dims=1) .== N_Bus .- sum(X_BS, dims=1) .- sum(1 .- X_EN, dims=1))
 
     # % 线路操作约束
     @constraint(expert_model, X_tieline[:, 2:NT] .>= X_tieline[:, 1:NT-1])
 
     @constraint(expert_model, X_tieline[:, 1] .>= X_tieline0) #NOTE X_tieline0 需要在外部输入
-    @constraint(expert_model, sum(X_tieline[:, 2:NT] .- X_tieline[:, 1:NT-1], dims=1) .<= ones(1,NT-1))
+    @constraint(expert_model, sum(X_tieline[:, 2:NT] .- X_tieline[:, 1:NT-1], dims=1) .<= 1)
     @constraint(expert_model, sum(X_tieline[:, 1] .- X_tieline0, dims=1) .<= 1) #NOTE X_tieline0 需要在外部输入
 
 
@@ -368,7 +368,7 @@ function make_step_model(args_step)
     @constraint(step_model, X_tieline .== X_tieline_input) # % 不需要下面的约束，直接从外部输入 #NOTE X_tieline_input 需要在外部输入
 
     # Obj
-    @objective(step_model, Min, -sum(Pd_rec[:]) - 0.01*sum(X_line[:]) + 0.01*sum(e_Qsvc_up .+ e_Qsvc_down))
+    @objective(step_model, Min, -sum(Pd_rec[:]) - 0.01*sum(X_line[:]) + 1*sum(e_Qsvc_up .+ e_Qsvc_down))
 
     return step_model
 end
@@ -376,13 +376,13 @@ end
 model = OPF_Core(sys_file_name="Case_33BW_Data.xlsx",NT=5)
 set_optimizer(model.expert_model, Gurobi.Optimizer) # 需要指定求解器
 set_optimizer(model.step_model, Gurobi.Optimizer)
-optimize!(model.expert_model)
-optimize!(model.step_model)
+# optimize!(model.expert_model)
+# optimize!(model.step_model)
 
 
 # 以下为测试修改a (env.rest)后，专家模型的变化
 a_input = ones(32,5)
-dmg_list = [11,21] # 先随便定义一个
+dmg_list = [6,11,29,32]# 先随便定义一个
 a_input[dmg_list, :] .= 0
 
 # 注意这个循环，维度可以用size(a_input)来看
