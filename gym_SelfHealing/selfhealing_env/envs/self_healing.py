@@ -66,12 +66,15 @@ class SelfHealing_Env(gym.Env):
         """ 
         Take 33BW system with 5 tie-lies as an example. The agent has five step chances to take actions.
         ----------------------------------------------------------------------------------------------
-            S1   -A1->   S2    -A2->   S3    -A3->    S4    -A4->    S5    -A5->   S6(terminal)
-         reset  step1        step2          step3          step4          step5       
+            S0   -A1->   S1    -A2->   S2    -A3->    S3    -A4->    S4    -A5->   S5 (terminal)
+         reset  step1        step2          step3          step4          step5   
+         ---------------------------------------------------------------------------------------------
+                idx:0->1     idx=1->2       idx=2->3       idx=3->4       idx=4->5
+              (_step->step_)                                           thus, if idx>=4, done=True after transition
          ----------------------------------------------------------------------------------------------
         """
         self.exploration_total = self.system_data.N_TL
-        self.exploration_seq_idx = [i for i in range(self.exploration_total + 1)]
+        self.exploration_seq_idx = [i for i in range(self.exploration_total)]
         
         if self.vvo:
             self.action_space = spaces.Dict({
@@ -163,7 +166,6 @@ class SelfHealing_Env(gym.Env):
         """
         #TODO Add Gurobipy env support : Reset env models according to the disturbance
         jl.set_dmg(self.a) # 对模型设置普通线路的灾害状态
-        jl.set_ExpertModel(X_tieline0_input=X_tieline0,vvo=self.vvo) # 设置Expert模型的初始状态
         jl.set_ResetModel(X_tieline_input=X_tieline0, Q_svc_input=Q_svc0)
         """----------------------------------------"""
 
@@ -186,6 +188,8 @@ class SelfHealing_Env(gym.Env):
         load_rate_current = load_value_current / self.system_data.Pd_all
         self.load_rate_episode.append(load_rate_current) # 添加到该episode的得分记录表中
         self._x_nl = np.round(_b[0:self.system_data.N_NL-1]).astype(np.int8) # 保存普通线路的状态，用于判断step的拓扑是否可行
+        
+        jl.set_ExpertModel(X_tieline0_input=X_tieline0,X_rec0_input=self._x_load,vvo=self.vvo) # 设置Expert模型的初始状态
         
         """---------------------求解Expert模型,返回结果----------------------"""
         # 在reset的同时就可以求解Expert模型
@@ -255,8 +259,8 @@ class SelfHealing_Env(gym.Env):
         event_log = None
         action_accepted = False
         # first check if this is the last step in this episode
-        if self.exploration_index <= self.exploration_total:
-            if self.exploration_index == self.exploration_total:
+        if self.exploration_index <= self.exploration_total-1:
+            if self.exploration_index == self.exploration_total-1:
                 done = True
             else:
                 done = False
@@ -278,14 +282,14 @@ class SelfHealing_Env(gym.Env):
                 # 还需要记录上一步的负荷拾取情况、总负荷恢复量、tieline状态
                 _x_nl = np.round(_b[0:self.system_data.N_NL-1]).astype(np.int8)
                 flag_x_nl = np.any(_x_nl<self._x_nl) # 普通线路状态不同，说明拓扑不可行，违反辐射状，
-                flag_e_Qvsc = e_Qvsc >= 1e-4 # svc指令误差大于1e-4，说明svc指令不可行
+                flag_e_Qvsc = e_Qvsc >= 1e-6 # svc指令误差大于1e-4，说明svc指令不可行
                 if flag_x_nl: # 拓扑不可行
                     event_log = "Infeasible Topology"
                     reward = -1000 
                     self.load_rate_episode.append(self.load_rate_episode[-1]) # 负荷不回复，保持上一步状态
                 elif flag_e_Qvsc: # svc指令不可行
                     event_log = "Infeasible SVC Scheduling"
-                    reward = -500
+                    reward = -1000
                     self.load_rate_episode.append(self.load_rate_episode[-1])
                 else: # 有效action
                     # 因为负荷被拾取后不会再失去，所以至少是上一步的负荷恢复量

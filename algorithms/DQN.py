@@ -2,10 +2,10 @@ import time
 from datetime import datetime
 import os
 import sys
-import logging # 日志记录用
+import logging 
 import gymnasium as gym
 import selfhealing_env
-from typing import Optional, Tuple, Union 
+from typing import Optional 
 import numpy as np
 from stable_baselines3 import DQN
 import torch
@@ -19,10 +19,10 @@ class TrainManager():
                  log_output_path:Optional[str],
                  log_level:int = logging.DEBUG,
                  timer_enable: bool = False,
-                 episode_num:int = 1000,
+                 episode_num:int = 500,
                  learning_rate: float = 0.001,
                  buffer_size: int = 100000,
-                 learning_starts:int = 200,
+                 learning_starts:int = 100,
                  batch_size:int = 50,
                  tau:float = 0.1,
                  gamma:float = 0.95,
@@ -92,45 +92,48 @@ class TrainManager():
             
         # ================ calculate Benchmark value to normalize the restoration as ratio ==================
         self.logger.info("-------------------Run_test begin--------------------")
-        self.logger.info("The testing disturbance is {}".format(test_disturbance_set))
+        self.logger.info("The testing disturbance is {}".format(sorted(test_disturbance_set)))
         # 计算goal
         load_rate_s0 = expert_info["Recovered_Load_Rate_S0"]
         expert_load_rate_max = expert_info["Expert_Policy"]["Load_Rate"][-1] # 因为负荷不可能降低
         goal = expert_load_rate_max - load_rate_s0 # 专家策略回复提升量(归一化)
         
+        self.logger.info("Expert policy is {}".format(expert_info["Expert_Policy"]["TieLine_Action"].T.tolist())) # 记录专家策略
+        
         if self.timer_enable == True:
             print("Complete solving benchmark using {} \n".format(time.time() - stime))
-            #TODO 添加专家策略的动作是什么
             print("Begin testing \n")
             stime = time.time()
         
         # ============== run agent using trained policy approximator ==================
         # 用智能体在这个env中输出动作，记录负荷恢复量
         agent_info = None
-        for step in self.env.exploration_seq_idx[-self.env.exploration_total:]:
+        for step in self.env.exploration_seq_idx:
             s0 = np.reshape(s0, (-1, self.env.system_data.N_Branch)) # 将37维列向量转换为1*37的矩阵，-1是自动计算行数
             a, _ = self.agent.predict(s0)  # this action is one-hot encoded
-            self.logger.info("learning given state {} at step {}".format(s0[0][-self.env.system_data.N_TL:], step))
-            self.logger.info("learning action at step {} is {}".format(step, a))
+            self.logger.info("Given state S[{}] = {}".format(step, s0[0]))
+            self.logger.info("Agent action at S[{}] is A[{}] = {}".format(step, step+1, a))
                 
-            s, _, _, _, agent_info = self.env.step(a.item()) # 此时动作其实是一个只有单个元素的np.ndarray
+            s, reward, _, _, agent_info = self.env.step(a.item()) # 此时动作其实是一个只有单个元素的np.ndarray
+            load_rate = agent_info["Recovered_Load_Rate"]
+            self.logger.info("Event at S[{}] is '{}'".format(step+1, agent_info["Event_Log"]))
+            self.logger.info("Reward R[{}] is {}. Load rate at S[{}] is {}.".format(step+1, reward,step+1, load_rate))
             # update state
             s0 = s
         
         if self.timer_enable == True:
-            print("Complete testing using {} \n".format(time.time() - stime))
+            print("Complete testing using {}s \n".format(time.time() - stime))
             print("Begin recording \n")
             stime = time.time()
             
         # ================ evaluate success =====================
-        
+        self.logger.info("Load rate at S0 is {}".format(load_rate_s0)) # 记录初始负荷恢复量
         agent_load_rate_max = agent_info["Recovered_Load_Rate"]
         performance = agent_load_rate_max - load_rate_s0 # 智能体策略回复提升量(归一化)
-        self.logger.info("run test final load recover rate is {}".format(agent_load_rate_max))
         if abs(goal) > 1e-4:
             self.logger.info("performance: {}; goal: {}".format(performance, goal)) 
         else:
-            self.logger.info("nothing we can do to improve the load profile") # 差异极小，系统没救了，没有自愈的必要
+            self.logger.info("Nothing we can do to improve the load profile. (Reason: performance={}, goal={})".format(performance,goal)) # 差异极小，系统没救了，没有自愈的必要
         
         #TODO success_logger记录(test_disturbance_set, performance, goal, load_rate_s0, total_load, case_name...)
         
@@ -161,10 +164,18 @@ class TrainManager():
 if __name__ == "__main__":
     output_path = os.getcwd()
     output_path = output_path + "/results/results_DQN_stable_tieline_stochastic_dist/n_1/"
-    env = gym.make("SelfHealing-v0",solver="cplex", data_file="Case_33BW_Data.xlsx",vvo=False)
+    env = gym.make(id="SelfHealing-v0",
+                   solver="cplex", 
+                   data_file="Case_33BW_Data.xlsx",
+                   solver_display = False, 
+                   vvo= False, 
+                   min_disturbance = 2, 
+                   max_disturbance = 5
+                   )
     manager = TrainManager(env=env,
                             log_output_path=output_path,
-                            timer_enable=True
+                            timer_enable=True,
+                            device=torch.device("cpu"),
                         )
     manager.train()
     

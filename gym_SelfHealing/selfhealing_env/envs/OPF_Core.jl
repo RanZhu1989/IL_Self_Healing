@@ -27,6 +27,7 @@ function make_expert_model(args_expert)
     # 找了一下，JuMP对约束的修改不支持张量，觉得还是fix比较适合
     @variable(expert_model, a[1:N_NL, 1:NT]) # line health state
     @variable(expert_model, X_tieline0[1:N_TL]) 
+    @variable(expert_model, X_rec0[1:N_Bus])
 
 
     # --------------------
@@ -71,10 +72,11 @@ function make_expert_model(args_expert)
 
     # 3. % 3. Load Curtailments
     @constraint(expert_model, X_rec .<= X_EN)
-    @constraint(expert_model, X_rec[1,:] .== 0)
+    @constraint(expert_model, X_rec[1,:] .== 0) # Bus 1 is the slack bus
     @constraint(expert_model, Pd_rec .== X_rec .* Pd)
     @constraint(expert_model, Qd_rec .== X_rec .* Qd)
     @constraint(expert_model, X_rec[:,2:NT] .>= X_rec[:,1:NT-1])
+    @constraint(expert_model, X_rec[:,1] .>= X_rec0) #NOTE X_rec0 需要在外部输入
 
     # % 4. 线路
     @constraint(expert_model, PF .>= -S_Branch .* b)
@@ -243,7 +245,7 @@ function make_step_model(args_step)
 
     
     # Obj
-    @objective(step_model, Min, -sum(Pd_rec[:]) - 0.01*sum(X_line[:]) + 10*sum(e_Qsvc_up .+ e_Qsvc_down))
+    @objective(step_model, Min, -sum(Pd_rec[:]) - 0.01*sum(X_line[:]) + 1000*sum(e_Qsvc_up .+ e_Qsvc_down))
 
     return step_model
 end
@@ -388,12 +390,16 @@ function set_dmg(a_input)
 
 end
 
-function set_ExpertModel(; X_tieline0_input, vvo=true)
+function set_ExpertModel(; X_tieline0_input, X_rec0_input, vvo=true)
     # 设置tieline初始状态
     global core
 
     for idx in eachindex(X_tieline0_input)
         fix(core.expert_model[:X_tieline0][idx],X_tieline0_input[idx])
+    end
+
+    for idx in eachindex(X_rec0_input)
+        fix(core.expert_model[:X_rec0][idx],X_rec0_input[idx])
     end
 
     if !vvo
