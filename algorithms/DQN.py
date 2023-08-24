@@ -19,17 +19,18 @@ class TrainManager():
                  log_output_path:Optional[str],
                  log_level:int = logging.DEBUG,
                  timer_enable: bool = False,
-                 episode_num:int = 500,
+                 episode_num:int = 200,
                  learning_rate: float = 0.001,
                  buffer_size: int = 100000,
-                 learning_starts:int = 100,
-                 batch_size:int = 50,
+                 learning_starts:int = 50,
+                 batch_size:int = 30,
                  tau:float = 0.1,
                  gamma:float = 0.95,
                  exploration_final_eps:float = 0.05,
-                 verbose:int = 1,
+                 verbose:int = 0,
                  device:torch.device = torch.device("cpu"),
-                 seed:Optional[int] = None
+                 seed:Optional[int] = None,
+                 tensorboard_log:Optional[str] = None
                  ):
         
         self.env = env
@@ -53,7 +54,8 @@ class TrainManager():
                         exploration_final_eps = exploration_final_eps,
                         verbose = verbose,
                         device = self.device,
-                        seed = self.seed
+                        seed = self.seed,
+                        tensorboard_log = tensorboard_log,
                         )
         
         self.set_loggers()
@@ -93,6 +95,13 @@ class TrainManager():
         # ================ calculate Benchmark value to normalize the restoration as ratio ==================
         self.logger.info("-------------------Run_test begin--------------------")
         self.logger.info("The testing disturbance is {}".format(sorted(test_disturbance_set)))
+        
+        if expert_info["Expert_Policy"] == None:
+            self.logger.info("Warning: Numerical issues in solving the Rest Model made Xrec0 infeasible, rendering the Expert Model unsolvable.")
+            self.logger.info("This occurrence is rare, but if it happens frequently, please adjust the penalty coefficients in the objective function.")
+            self.logger.info("Test in this episode is cancelled.")
+            return None
+            
         # 计算goal
         load_rate_s0 = expert_info["Recovered_Load_Rate_S0"]
         expert_load_rate_max = expert_info["Expert_Policy"]["Load_Rate"][-1] # 因为负荷不可能降低
@@ -151,7 +160,7 @@ class TrainManager():
                 print("===================================================")
             self.logger.info(f"=============== Mission {idx_episode:d} of {self.episode_num:d} =================")
             # executes the expert policy and perform Deep Q learning
-            self.agent.learn(total_timesteps=self.time_steps) # 这里5就是ENV中的NT
+            self.agent.learn(total_timesteps=self.time_steps,reset_num_timesteps=False) # 这里5就是ENV中的NT
             # test: execute learned policy on the environment
             self.test_agent()
         
@@ -162,20 +171,23 @@ class TrainManager():
    
     
 if __name__ == "__main__":
-    output_path = os.getcwd()
-    output_path = output_path + "/results/results_DQN_stable_tieline_stochastic_dist/n_1/"
+    current_path = os.getcwd()
+    log_output_path = current_path + "/results/results_DQN_stable_tieline_stochastic_dist/n_1/"
+    tensorboard_path = current_path + "/results/tensorboard/"
+    
     env = gym.make(id="SelfHealing-v0",
-                   solver="cplex", 
+                   opt_framework="Gurobipy",
+                   solver="gurobi", 
                    data_file="Case_33BW_Data.xlsx",
                    solver_display = False, 
                    vvo= False, 
                    min_disturbance = 2, 
-                   max_disturbance = 5
-                   )
+                   max_disturbance = 5)
     manager = TrainManager(env=env,
-                            log_output_path=output_path,
+                            log_output_path=log_output_path,
                             timer_enable=True,
                             device=torch.device("cpu"),
+                            tensorboard_log=None
                         )
     manager.train()
     

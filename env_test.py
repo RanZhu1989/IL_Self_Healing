@@ -2,8 +2,10 @@ import selfhealing_env
 import gymnasium as gym
 
 import numpy as np
+from stable_baselines3.common.env_checker import check_env
 
 env = gym.make("SelfHealing-v0",
+               opt_framework="JuMP",
                solver="cplex",
                data_file="Case_33BW_Data.xlsx",
                solver_display=False,
@@ -12,7 +14,7 @@ env = gym.make("SelfHealing-v0",
                vvo=False)
 reset_option = {
     "Specific_Disturbance": [6,11,29,32],
-    "Expert_Policy_Required": False
+    "Expert_Policy_Required": True
 }
 obs,info = env.reset(options=reset_option)
 # obs,info = env.reset(disturbance=[3,9,14,21,23])
@@ -85,3 +87,14 @@ print(reward)
 print(obs)
 print(info)
 print(done)
+
+env = gym.make("SelfHealing-v0",
+               opt_framework="JuMP",
+               solver="cplex",
+               data_file="Case_33BW_Data.xlsx",
+               solver_display=False,
+               min_disturbance=2, 
+               max_disturbance=5, 
+               vvo=False)
+
+check_env(env)

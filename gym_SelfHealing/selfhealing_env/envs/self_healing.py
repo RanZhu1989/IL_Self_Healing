@@ -1,38 +1,58 @@
 import gymnasium as gym
 from gymnasium import spaces
 from gymnasium.utils import seeding
-from .System_Data import *
+from .System_Data import System_Data
 from julia import Main as jl
 import os
 import numpy as np
 import random
 from typing import Optional, Tuple, Union 
+import warnings
+try:
+    from .OPF_Core import OPF_Core
+except ImportError:
+    warning_msg = "Gurobipy env support is not available: Importing Gurobipy failed."
+    warnings.warn(warning_msg)
+else:
+    pass
+    
 
 class SelfHealing_Env(gym.Env):
     metadata = {'render_modes': ['human']}
     def __init__(self, 
                  data_file:str, 
-                 solver:str = "cplex", 
+                 opt_framework:str = "JuMP",
+                 solver:Optional[str] = "cplex", 
                  solver_display:bool = False, 
                  vvo:bool = True, 
                  min_disturbance:int = 1, 
                  max_disturbance:int = 1
                  ) -> None:
-        """参数: 
-        solver: 求解器,可选CPLEX或Gurobi
-        vvo:是否考虑svc
-        min_disturbance: 随机N-k中的k的最小值
-        max_disturbance: 随机N-k中的k的最大值
-        """
-        #---------设置求解器----------------------
-        if solver == "cplex":
-            self.solver = "CPLEX"
+        
+        self.opt_framework = opt_framework
+        
+        if self.opt_framework == "JuMP":
+            """参数: 
+            solver: 求解器,可选CPLEX或Gurobi
+            vvo:是否考虑svc
+            min_disturbance: 随机N-k中的k的最小值
+            max_disturbance: 随机N-k中的k的最大值
+            """
+            #---------设置求解器----------------------
+            if solver == "cplex":
+                self.solver = "CPLEX"
+                
+            elif solver == "gurobi":
+                self.solver = "Gurobi"
+                
+            else:
+                raise Exception("Solver not supported!")
             
-        elif solver == "gurobi":
-            self.solver = "Gurobi"
-            
+        elif self.opt_framework == "Gurobipy":
+            pass
+        
         else:
-            raise Exception("Solver not supported!")
+            raise Exception("Optimization framework not supported!")
         
         #---------设置扰动----------------------
         self.min_disturbance = min_disturbance
@@ -54,12 +74,21 @@ class SelfHealing_Env(gym.Env):
         # 目标是建立三个opf模型 分别是Expert, Reset, Step
         """
         #TODO Add Gurobipy env support : Create & initialize env
-        jl.eval("using " + self.solver)
-        jl.include(os.path.join(os.path.dirname(__file__),"OPF_Core.jl"))
-        jl.init_opf_core(args_expert=self.system_data.args_expert,
-                         args_step=self.system_data.args_step,
-                         solver=self.solver,
-                         display=solver_display)
+        if self.opt_framework == "JuMP":
+            jl.eval("using " + self.solver)
+            jl.include(os.path.join(os.path.dirname(__file__),"OPF_Core.jl"))
+            jl.init_opf_core(args_expert=self.system_data.args_expert,
+                            args_step=self.system_data.args_step,
+                            solver=self.solver,
+                            display=solver_display)
+            
+        elif self.opt_framework == "Gurobipy":
+            self.core = OPF_Core(args_expert=self.system_data.args_expert,
+                            args_step=self.system_data.args_step,
+                            display=solver_display)
+        
+        else:
+            raise Exception("Optimization framework not supported!")
         """----------------------------------------"""
         
         # ---动作状态空间相关参数设置---
@@ -165,13 +194,30 @@ class SelfHealing_Env(gym.Env):
         # 目标是为每个模型设置N-k受损状态; 为Expert和Reset模型设置初始TieLine; 为Reset模型设置初始Q_svc
         """
         #TODO Add Gurobipy env support : Reset env models according to the disturbance
-        jl.set_dmg(self.a) # 对模型设置普通线路的灾害状态
-        jl.set_ResetModel(X_tieline_input=X_tieline0, Q_svc_input=Q_svc0)
+        if self.opt_framework == "JuMP":
+            jl.set_dmg(self.a) # 对模型设置普通线路的灾害状态
+            jl.set_ResetModel(X_tieline_input=X_tieline0, Q_svc_input=Q_svc0)
+            
+        elif self.opt_framework == "Gurobipy":
+            self.core.set_dmg(self.a)
+            self.core.set_ResetModel(X_tieline_input=X_tieline0, Q_svc_input=Q_svc0)
+            
+        else:
+            raise Exception("Optimization framework not supported!")
+        
         """----------------------------------------"""
 
         """---------------------求解Reset模型,返回observation----------------------"""
         #TODO Add Gurobipy env support : Solve reset model
-        _b, _x_tieline, _x_load, _PF, _QF, load_value_current = jl.solve_ResetModel()
+        if self.opt_framework == "JuMP":
+            _b, _x_tieline, _x_load, _PF, _QF, load_value_current = jl.solve_ResetModel()
+            
+        elif self.opt_framework == "Gurobipy":
+            _b, _x_tieline, _x_load, _PF, _QF, load_value_current = self.core.solve_ResetModel()
+            
+        else:
+            raise Exception("Optimization framework not supported!")
+        
         """------------------------------------------------------------------------------"""
         
         self._x_load = np.round(_x_load).astype(np.int8) # 还需要用self记录上一步的负荷拾取情况、总负荷恢复量、tieline状态
@@ -189,44 +235,53 @@ class SelfHealing_Env(gym.Env):
         self.load_rate_episode.append(load_rate_current) # 添加到该episode的得分记录表中
         self._x_nl = np.round(_b[0:self.system_data.N_NL-1]).astype(np.int8) # 保存普通线路的状态，用于判断step的拓扑是否可行
         
-        jl.set_ExpertModel(X_tieline0_input=X_tieline0,X_rec0_input=self._x_load,vvo=self.vvo) # 设置Expert模型的初始状态
-        
-        """---------------------求解Expert模型,返回结果----------------------"""
-        # 在reset的同时就可以求解Expert模型
-        
-        if expert_policy_required:
-            expert_b, expert_x_tieline, expert_x_load, \
-                expert_Pg, expert_Qg, load_value_expert = jl.solve_ExpertModel()
-                
-            expert_b = np.round(expert_b).astype(np.int8)
-            expert_x_tieline = np.round(expert_x_tieline).astype(np.int8)
-            expert_x_load = np.round(expert_x_load).astype(np.int8)
-            expert_P_sub = expert_Pg[0,:]
-            expert_Q_sub = expert_Qg[0,:]
-            expert_Q_svc = expert_Qg[1:,:]
-            load_value_expert = load_value_expert.flatten()
-            expert_load_rate = load_value_expert / np.sum(self.system_data.Pd, axis=0)
-            
-            expert_policy = {"Branch_Energized": expert_b,
-                             "Load_Energized": expert_x_load,
-                             "TieLine_Action": expert_x_tieline,
-                             "P_sub": expert_P_sub,
-                             "Q_sub": expert_Q_sub,
-                             "Q_svc": expert_Q_svc,
-                             "Load_Rate": expert_load_rate}
-            
+        """---------------------设置Expert模型----------------------"""
+        #TODO Add Gurobipy env support : Set & solve expert model
+        if self.opt_framework == "JuMP":
+            jl.set_ExpertModel(X_tieline0_input=X_tieline0,X_rec0_input=self._x_load,X_line0_input=self._x_nl,vvo=self.vvo) # 设置Expert模型的初始状态
+        elif self.opt_framework == "Gurobipy":
+            self.core.set_ExpertModel(X_tieline0_input=X_tieline0,X_rec0_input=self._x_load,X_line0_input=self._x_nl,vvo=self.vvo)
         else:
-            expert_policy = None
-        
-        
-        
+            raise Exception("Optimization framework not supported!")
+        """---------------------------------------------------------"""
+        # 在reset的同时就可以求解Expert模型
+        expert_policy = None
+        if expert_policy_required:
+            """---------------------求解Expert模型,返回expert policy----------------------"""
+            if self.opt_framework == "JuMP":
+                solved_flag, expert_b, expert_x_tieline, expert_x_load, \
+                    expert_Pg, expert_Qg, load_value_expert = jl.solve_ExpertModel()
+            elif self.opt_framework == "Gurobipy":
+                solved_flag, expert_b, expert_x_tieline, expert_x_load, \
+                    expert_Pg, expert_Qg, load_value_expert = self.core.solve_ExpertModel()
+            else:
+                raise Exception("Optimization framework not supported!")
+            """------------------------------------------------------------------------------"""
+            if solved_flag:
+                expert_b = np.round(expert_b).astype(np.int8)
+                expert_x_tieline = np.round(expert_x_tieline).astype(np.int8)
+                expert_x_load = np.round(expert_x_load).astype(np.int8)
+                expert_P_sub = expert_Pg[0,:]
+                expert_Q_sub = expert_Qg[0,:]
+                expert_Q_svc = expert_Qg[1:,:]
+                load_value_expert = load_value_expert.flatten()
+                expert_load_rate = load_value_expert / np.sum(self.system_data.Pd, axis=0)
+                
+                expert_policy = {"Branch_Energized": expert_b,
+                                "Load_Energized": expert_x_load,
+                                "TieLine_Action": expert_x_tieline,
+                                "P_sub": expert_P_sub,
+                                "Q_sub": expert_Q_sub,
+                                "Q_svc": expert_Q_svc,
+                                "Load_Rate": expert_load_rate}
+                                
         # info返回当前episode case的属性
         info = {
             "VVO_Enabled": self.vvo,
             "Specific_Disturbance": not random_mode,
             "k of N-k": num_disturbance,
             "Disturbance_Set": self.disturbance,
-            "Episode_Length": self.exploration_total+1,
+            "Episode_Length": self.exploration_total,
             "Recovered_Load_Rate_S0": load_rate_current,
             "Expert_Policy_Required": expert_policy_required,
             "Expert_Policy": expert_policy
@@ -267,13 +322,20 @@ class SelfHealing_Env(gym.Env):
             # =====================  solve for load status =====================
             """-------------------将动作输入到环境模型并求解----------------------"""
             #TODO Add Gurobipy env support : Setup & Solve step model
-            jl.set_StepModel(X_rec0_input=self._x_load, X_tieline_input=x_tieline_input, 
-                            Q_svc_input=q_svc_input, vvo=self.vvo)
-            results = jl.solve_StepModel()
+            if self.opt_framework == "JuMP":
+                jl.set_StepModel(X_rec0_input=self._x_load, X_tieline_input=x_tieline_input, 
+                                Q_svc_input=q_svc_input, vvo=self.vvo)
+                results = jl.solve_StepModel()
+            elif self.opt_framework == "Gurobipy":
+                self.core.set_StepModel(X_rec0_input=self._x_load, X_tieline_input=x_tieline_input, 
+                                Q_svc_input=q_svc_input, vvo=self.vvo)
+                results = self.core.solve_StepModel()
+            else:
+                raise Exception("Optimization framework not supported!")
             """----------------------------------------------------------------"""
             # 若无解，说明tieline合不上, tieline状态不变，reward为-1000
 
-            solved, _b, _x_tieline, _x_load, _PF, _QF, load_value_new, e_Qvsc = results
+            solved, _b, _x_tieline, _x_load, _PF, _QF, load_value_new, e_Qsvc = results
             if not solved:
                 event_log = "Infeasible Tieline Action"
                 reward = -1000
@@ -282,12 +344,12 @@ class SelfHealing_Env(gym.Env):
                 # 还需要记录上一步的负荷拾取情况、总负荷恢复量、tieline状态
                 _x_nl = np.round(_b[0:self.system_data.N_NL-1]).astype(np.int8)
                 flag_x_nl = np.any(_x_nl<self._x_nl) # 普通线路状态不同，说明拓扑不可行，违反辐射状，
-                flag_e_Qvsc = e_Qvsc >= 1e-6 # svc指令误差大于1e-4，说明svc指令不可行
+                flag_e_Qsvc = e_Qsvc >= 1e-6 # svc指令误差大于1e-4，说明svc指令不可行
                 if flag_x_nl: # 拓扑不可行
                     event_log = "Infeasible Topology"
                     reward = -1000 
                     self.load_rate_episode.append(self.load_rate_episode[-1]) # 负荷不回复，保持上一步状态
-                elif flag_e_Qvsc: # svc指令不可行
+                elif flag_e_Qsvc: # svc指令不可行
                     event_log = "Infeasible SVC Scheduling"
                     reward = -1000
                     self.load_rate_episode.append(self.load_rate_episode[-1])

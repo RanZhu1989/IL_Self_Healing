@@ -7,6 +7,7 @@ setup(
                       "numpy",
                       "pandas",
                       "matplotlib",
-                      "stable_baselines3"                    
+                      "stable_baselines3",
+                      "julia"                   
                         ],
 )

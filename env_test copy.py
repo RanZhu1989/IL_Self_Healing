@@ -4,14 +4,15 @@ import gymnasium as gym
 import numpy as np
 
 env = gym.make("SelfHealing-v0",
-               solver="cplex",
+               opt_framework="Gurobipy",
+               solver="gurobi",
                data_file="Case_33BW_Data.xlsx",
                solver_display=True,
                min_disturbance=2, 
                max_disturbance=5, 
                vvo=False)
 reset_option = {
-    "Specific_Disturbance": [6],
+    "Specific_Disturbance": [12,17,21],
     "Expert_Policy_Required": True
 }
 obs,info = env.reset(options=reset_option)
@@ -19,7 +20,7 @@ obs,info = env.reset(options=reset_option)
 # obs,info = env.reset(disturbance=None)
 print(info)
 
-action = 1
+action = 2
 
 obs, reward, done, _, info = env.step(action)
 print(reward)

@@ -1,9 +1,9 @@
 using JuMP
 
 struct OPF_Core
-    expert_model
-    step_model
-    reset_model
+    expert_model::JuMP.Model
+    step_model::JuMP.Model
+    reset_model::JuMP.Model
     # 在一次任务中，OPF_Core只需初始化一次，关于系统的data在创建时输入，env.rest会产生a, 
     function OPF_Core(args_expert, args_step)
         expert_model = make_expert_model(args_expert)
@@ -15,7 +15,7 @@ struct OPF_Core
 end
 
 
-function make_expert_model(args_expert)
+function make_expert_model(args_expert)::JuMP.Model
 
     NT, N_Branch, N_TL, N_NL, N_Bus, pIn, N_DG, DG_Mask, R_Branch, X_Branch, Big_M_V, V0,
         V_min, V_max, Pd, Qd, S_Branch, P_DG_min, P_DG_max, Q_DG_min, Q_DG_max, BigM_SC, BSDG_Mask,
@@ -28,6 +28,7 @@ function make_expert_model(args_expert)
     @variable(expert_model, a[1:N_NL, 1:NT]) # line health state
     @variable(expert_model, X_tieline0[1:N_TL]) 
     @variable(expert_model, X_rec0[1:N_Bus])
+    @variable(expert_model, X_line0[1:N_NL])
 
 
     # --------------------
@@ -99,7 +100,7 @@ function make_expert_model(args_expert)
 
     # ---------------Island----------------
     #  1. 一个节点为黑启动节点的条件：存在一个BSDG 
-    @constraint(expert_model, X_BS .<= repeat(sum(BSDG_Mask,dims=2),1,NT))
+    @constraint(expert_model, X_BS .== repeat(sum(BSDG_Mask,dims=2),1,NT))
 
     # % 2. 每个孤岛是联通的。根据节点是否为黑启动节点，分为两种情况讨论
     @constraint(expert_model, pIn * FF .+ X_EN .<= Big_M_FF .* (1 .- z_bs1))
@@ -128,6 +129,8 @@ function make_expert_model(args_expert)
     @constraint(expert_model, X_tieline[:, 1] .>= X_tieline0) #NOTE X_tieline0 需要在外部输入
     @constraint(expert_model, sum(X_tieline[:, 2:NT] .- X_tieline[:, 1:NT-1], dims=1) .<= 1)
     @constraint(expert_model, sum(X_tieline[:, 1] .- X_tieline0, dims=1) .<= 1) #NOTE X_tieline0 需要在外部输入
+    @constraint(expert_model, X_line[:,2:NT] .>= X_line[:,1:NT-1])
+    @constraint(expert_model, X_line[:,1] .>= X_line0)
 
     # Obj
     @objective(expert_model, Min, -sum(Pd_rec[:]) - 0.01*sum(X_line[:]) + sum(delta_Qdg[:]))
@@ -137,7 +140,7 @@ function make_expert_model(args_expert)
 end
 
 
-function make_step_model(args_step)
+function make_step_model(args_step)::JuMP.Model
     NT, N_Branch, N_TL, N_NL, N_Bus, pIn, N_DG, DG_Mask, R_Branch, X_Branch, Big_M_V, V0,
         V_min, V_max, Pd, Qd, S_Branch, P_DG_min, P_DG_max, Q_DG_min,
         Q_DG_max, BSDG_Mask, Big_M_FF = args_step
@@ -220,7 +223,7 @@ function make_step_model(args_step)
 
     # ---------------Island----------------
     #  1. 一个节点为黑启动节点的条件：存在一个BSDG 
-    @constraint(step_model, X_BS .<= repeat(sum(BSDG_Mask,dims=2),1,NT))
+    @constraint(step_model, X_BS .== repeat(sum(BSDG_Mask,dims=2),1,NT))
 
     # % 2. 每个孤岛是联通的。根据节点是否为黑启动节点，分为两种情况讨论
     @constraint(step_model, pIn * FF .+ X_EN .<= Big_M_FF .* (1 .- z_bs1))
@@ -251,7 +254,7 @@ function make_step_model(args_step)
 end
 
 
-function make_reset_model(args_step)
+function make_reset_model(args_step)::JuMP.Model
     NT, N_Branch, N_TL, N_NL, N_Bus, pIn, N_DG, DG_Mask, R_Branch, X_Branch, Big_M_V, V0,
         V_min, V_max, Pd, Qd, S_Branch, P_DG_min, P_DG_max, Q_DG_min,
         Q_DG_max, BSDG_Mask, Big_M_FF = args_step
@@ -322,7 +325,7 @@ function make_reset_model(args_step)
 
     # ---------------Island----------------
     #  1. 一个节点为黑启动节点的条件：存在一个BSDG 
-    @constraint(reset_model, X_BS .<= repeat(sum(BSDG_Mask,dims=2),1,NT))
+    @constraint(reset_model, X_BS .== repeat(sum(BSDG_Mask,dims=2),1,NT))
 
     # % 2. 每个孤岛是联通的。根据节点是否为黑启动节点，分为两种情况讨论
     @constraint(reset_model, pIn * FF .+ X_EN .<= Big_M_FF .* (1 .- z_bs1))
@@ -354,28 +357,58 @@ function make_reset_model(args_step)
 end
 
 
-function init_opf_core(; args_expert, args_step, solver="CPLEX", display=true)
+function init_opf_core(; args_expert::Tuple{Int64, Int64, Int64, Int64, Int64, Matrix{Float64}, Int64,
+                                             Matrix{Float64},Matrix{Float64}, Matrix{Float64}, Int64, 
+                                             Float64, Float64, Float64, Matrix{Float64}, Matrix{Float64}, 
+                                             Matrix{Float64}, Matrix{Float64}, Matrix{Float64}, Matrix{Float64}, 
+                                             Matrix{Float64}, Int64, Matrix{Float64}, Int64},
+                        args_step::Tuple{Int64, Int64, Int64, Int64, Int64, Matrix{Float64}, Int64, 
+                                            Matrix{Float64},Vector{Float64}, Vector{Float64}, Int64, Float64, 
+                                            Float64, Float64, Vector{Float64},Vector{Float64}, Vector{Float64}, 
+                                            Vector{Float64}, Vector{Float64}, Vector{Float64},Vector{Float64}, Matrix{Float64}, Int64},
+                        solver::String="CPLEX",
+                        MIP_gap_expert_model::Float64=1e-4,
+                        MIP_gap_step_model::Float64=1e-4,
+                        MIP_gap_reset_model::Float64=1e-4,
+                        display::Bool=true)::Nothing
+
     """We can not use jl.OPF_Core() thourgh julia_python interface. 
     Therefore we use this function to initialize the core."""
 
     global core = OPF_Core(args_expert, args_step)
     # NOTE MIP精度也在这里设置
     if solver == "CPLEX"
-        optimizer = optimizer_with_attributes(CPLEX.Optimizer,"CPXPARAM_ScreenOutput" => display)
+        expert_model_optimizer = optimizer_with_attributes(CPLEX.Optimizer,
+                                                            "CPXPARAM_ScreenOutput" => display,
+                                                            "CPX_PARAM_EPGAP" => MIP_gap_expert_model)
+        step_model_optimizer = optimizer_with_attributes(CPLEX.Optimizer,
+                                                            "CPXPARAM_ScreenOutput" => display,
+                                                            "CPX_PARAM_EPGAP" => MIP_gap_step_model)
+        reset_model_optimizer = optimizer_with_attributes(CPLEX.Optimizer,
+                                                            "CPXPARAM_ScreenOutput" => display,
+                                                            "CPX_PARAM_EPGAP" => MIP_gap_reset_model)
     elseif solver == "Gurobi"
-        optimizer = optimizer_with_attributes(Gurobi.Optimizer,"output_flag" => display)
+        expert_model_optimizer = optimizer_with_attributes(Gurobi.Optimizer,
+                                                            "output_flag" => display,
+                                                            "MIPGap" => MIP_gap_expert_model)
+        step_model_optimizer = optimizer_with_attributes(Gurobi.Optimizer,
+                                                            "output_flag" => display,
+                                                            "MIPGap" => MIP_gap_step_model)
+        reset_model_optimizer = optimizer_with_attributes(Gurobi.Optimizer,
+                                                            "output_flag" => display,
+                                                            "MIPGap" => MIP_gap_reset_model)
     else
         error("solver not supported")
     end
 
-    set_optimizer(core.expert_model, optimizer)
-    set_optimizer(core.step_model, optimizer)
-    set_optimizer(core.reset_model, optimizer)
+    set_optimizer(core.expert_model, expert_model_optimizer)
+    set_optimizer(core.step_model, step_model_optimizer)
+    set_optimizer(core.reset_model, reset_model_optimizer)
 
 end
 
 
-function set_dmg(a_input)
+function set_dmg(a_input::Matrix{Float64})::Nothing
     # 重设线路故障状态
     global core
 
@@ -390,7 +423,10 @@ function set_dmg(a_input)
 
 end
 
-function set_ExpertModel(; X_tieline0_input, X_rec0_input, vvo=true)
+function set_ExpertModel(;X_tieline0_input::Vector{Float64},
+                        X_rec0_input::Vector{Int8},
+                        X_line0_input::Vector{Int8},
+                        vvo::Bool=true)::Nothing
     # 设置tieline初始状态
     global core
 
@@ -402,6 +438,10 @@ function set_ExpertModel(; X_tieline0_input, X_rec0_input, vvo=true)
         fix(core.expert_model[:X_rec0][idx],X_rec0_input[idx])
     end
 
+    for idx in eachindex(X_line0_input)
+        fix(core.expert_model[:X_line0][idx], X_line0_input[idx])
+    end
+
     if !vvo
         for idx in eachindex(core.expert_model[:Q_dg][2:end,:])
             fix(core.expert_model[:Q_dg][2:end,:][idx],0)
@@ -409,7 +449,10 @@ function set_ExpertModel(; X_tieline0_input, X_rec0_input, vvo=true)
     end
 end
 
-function set_StepModel(; X_rec0_input,X_tieline_input,Q_svc_input=nothing, vvo=true)
+function set_StepModel(; X_rec0_input::Vector{Int8},
+                        X_tieline_input::Vector{Int8},
+                        Q_svc_input::Union{Vector{Float64},Nothing} =nothing,
+                        vvo::Bool=true)::Nothing
     # 为step模型输入上一步负荷状态、tieline指令、svc指令
 
     if vvo && Q_svc_input === nothing
@@ -438,7 +481,7 @@ function set_StepModel(; X_rec0_input,X_tieline_input,Q_svc_input=nothing, vvo=t
 end
 
 
-function set_ResetModel(; X_tieline_input, Q_svc_input)
+function set_ResetModel(; X_tieline_input::Vector{Float64}, Q_svc_input::Vector{Float64})::Nothing
 
     global core
 
@@ -453,23 +496,34 @@ function set_ResetModel(; X_tieline_input, Q_svc_input)
 end
 
 
-function solve_ExpertModel()
+function solve_ExpertModel()::Tuple{Bool, Union{Nothing, Matrix{Float64}}, Union{Nothing, Matrix{Float64}}, Union{Nothing, Matrix{Float64}}, 
+                                    Union{Nothing, Matrix{Float64}}, Union{Nothing, Matrix{Float64}}, Union{Nothing, Matrix{Float64}}}
 
     global core
     optimize!(core.expert_model)
+    solved_flag = false
 
-    b = value.(core.expert_model[:b])
-    x_tieline = value.(core.expert_model[:X_tieline])
-    x_load = value.(core.expert_model[:X_rec])
-    Pg = value.(core.expert_model[:P_dg])
-    Qg = value.(core.expert_model[:Q_dg])
-    Prec = sum(value.(core.expert_model[:Pd_rec]),dims=1)
+    if termination_status(core.expert_model) == MOI.OPTIMAL
+        solved_flag = true
+        b = value.(core.expert_model[:b])
+        x_tieline = value.(core.expert_model[:X_tieline])
+        x_load = value.(core.expert_model[:X_rec])
+        Pg = value.(core.expert_model[:P_dg])
+        Qg = value.(core.expert_model[:Q_dg])
+        Prec = sum(value.(core.expert_model[:Pd_rec]),dims=1)
 
-    return b, x_tieline, x_load, Pg, Qg, Prec
+        return solved_flag, b, x_tieline, x_load, Pg, Qg, Prec
+    else 
+        return solved_flag, nothing, nothing, nothing, nothing, nothing, nothing
+    end
 
 end
 
-function solve_StepModel()
+
+function solve_StepModel()::Tuple{Bool, Union{Nothing, Vector{Float64}}, Union{Nothing, Vector{Float64}}, 
+                                    Union{Nothing, Vector{Float64}}, Union{Nothing, Vector{Float64}}, 
+                                    Union{Nothing, Vector{Float64}}, Union{Nothing, Float64}, Union{Nothing, Float64}}
+
     global core
 
     solved_flag = false
@@ -484,17 +538,18 @@ function solve_StepModel()
         PF = value.(core.step_model[:PF][:,1])
         QF = value.(core.step_model[:QF][:,1])
         Prec = sum(value.(core.step_model[:Pd_rec]))
-        e_Qvsc = value.(sum(core.step_model[:e_Qsvc_up] .+ core.step_model[:e_Qsvc_down]))
+        e_Qsvc = value.(sum(core.step_model[:e_Qsvc_up] .+ core.step_model[:e_Qsvc_down]))
         
-        return solved_flag, b, x_tieline, x_load, PF, QF, Prec, e_Qvsc
+        return solved_flag, b, x_tieline, x_load, PF, QF, Prec, e_Qsvc
         
     else
-        return solved_flag, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing 
+        return solved_flag, nothing, nothing, nothing, nothing, nothing, nothing, nothing 
     end
 end
 
 
-function solve_ResetModel()
+function solve_ResetModel()::Tuple{Vector{Float64}, Vector{Float64}, Vector{Float64}, 
+                                    Vector{Float64}, Vector{Float64}, Float64}
     global Core
 
     optimize!(core.reset_model)
