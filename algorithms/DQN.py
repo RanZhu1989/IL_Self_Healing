@@ -18,7 +18,7 @@ class TrainManager():
                  env:gym.Env,
                  log_output_path:Optional[str],
                  log_level:int = logging.DEBUG,
-                 timer_enable: bool = False,
+                 timer_enable: bool = True,
                  episode_num:int = 200,
                  learning_rate: float = 0.001,
                  buffer_size: int = 100000,
@@ -45,6 +45,7 @@ class TrainManager():
         
         self.agent = DQN(policy = "MlpPolicy",
                          env = self.env,
+                         train_freq = (1, "episode"),
                         learning_rate = learning_rate,
                         buffer_size = buffer_size,
                         learning_starts = learning_starts,
@@ -89,9 +90,8 @@ class TrainManager():
             stime = time.time()
             
         test_options = {"Specific_Disturbance":None, "Expert_Policy_Required":True}
-        s0, expert_info = self.env.reset(options=test_options,seed=self.seed)
+        s0, expert_info = self.env.reset(options=test_options)
         test_disturbance_set = expert_info["Disturbance_Set"]
-            
         # ================ calculate Benchmark value to normalize the restoration as ratio ==================
         self.logger.info("-------------------Run_test begin--------------------")
         self.logger.info("The testing disturbance is {}".format(sorted(test_disturbance_set)))
@@ -131,7 +131,7 @@ class TrainManager():
             s0 = s
         
         if self.timer_enable == True:
-            print("Complete testing using {}s \n".format(time.time() - stime))
+            print("Complete testing using {} second \n".format(time.time() - stime))
             print("Begin recording \n")
             stime = time.time()
             
@@ -168,27 +168,36 @@ class TrainManager():
     
 
 
-   
-    
 if __name__ == "__main__":
+    
     current_path = os.getcwd()
     log_output_path = current_path + "/results/results_DQN_stable_tieline_stochastic_dist/n_1/"
-    tensorboard_path = current_path + "/results/tensorboard/"
+    tensorboard_path = log_output_path + "tensorboard/"
     
     env = gym.make(id="SelfHealing-v0",
-                   opt_framework="Gurobipy",
-                   solver="gurobi", 
+                   opt_framework="JuMP",
+                   solver="cplex", 
                    data_file="Case_33BW_Data.xlsx",
                    solver_display = False, 
                    vvo= False, 
                    min_disturbance = 2, 
                    max_disturbance = 5)
+     
     manager = TrainManager(env=env,
-                            log_output_path=log_output_path,
-                            timer_enable=True,
-                            device=torch.device("cpu"),
-                            tensorboard_log=None
+                           episode_num=10,
+                           learning_rate=0.001,
+                           learning_starts=50,
+                           batch_size=32,
+                           tau=1,
+                           gamma=0.95,
+                           verbose=0,
+                           log_output_path=log_output_path,
+                           timer_enable=True,
+                           device=torch.device("cpu"),
+                           tensorboard_log=None,
+                           seed=0
                         )
+    
     manager.train()
     
 

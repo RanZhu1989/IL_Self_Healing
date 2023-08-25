@@ -18,6 +18,7 @@ else:
     
 
 class SelfHealing_Env(gym.Env):
+    
     metadata = {'render_modes': ['human']}
     def __init__(self, 
                  data_file:str, 
@@ -78,14 +79,14 @@ class SelfHealing_Env(gym.Env):
             jl.eval("using " + self.solver)
             jl.include(os.path.join(os.path.dirname(__file__),"OPF_Core.jl"))
             jl.init_opf_core(args_expert=self.system_data.args_expert,
-                            args_step=self.system_data.args_step,
-                            solver=self.solver,
-                            display=solver_display)
+                             args_step=self.system_data.args_step,
+                             solver=self.solver,
+                             display=solver_display)
             
         elif self.opt_framework == "Gurobipy":
             self.core = OPF_Core(args_expert=self.system_data.args_expert,
-                            args_step=self.system_data.args_step,
-                            display=solver_display)
+                                 args_step=self.system_data.args_step,
+                                 display=solver_display)
         
         else:
             raise Exception("Optimization framework not supported!")
@@ -158,7 +159,7 @@ class SelfHealing_Env(gym.Env):
         if disturbance == None:
             random_mode = True
             temp_disturbance_set = self.system_data.disturbance_set.copy()
-            # generate disturbance upper bound for this episoid   N-k的k
+            # generate disturbance upper bound for this episode   N-k的k
             num_disturbance = random.randint(self.min_disturbance, self.max_disturbance)
             # record generated disturbance
             self.disturbance = []
