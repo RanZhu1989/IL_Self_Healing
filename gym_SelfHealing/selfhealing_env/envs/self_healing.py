@@ -89,6 +89,8 @@ class SelfHealing_Env(gym.Env):
         
         # Initialize OPF core
         """-------------------Initialize OPF Core----------------------
+            The core models will be immediately initialized once the environment is created.
+            The reset\step method will only modify some parameters of these pre-loaded core models.
         
            ==============        ====================        ===================
            Opt_Framework                Method                      Items
