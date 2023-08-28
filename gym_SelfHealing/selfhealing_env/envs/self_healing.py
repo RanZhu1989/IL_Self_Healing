@@ -202,11 +202,11 @@ class SelfHealing_Env(gym.Env):
         if disturbance == None:
             random_mode = True
             temp_disturbance_set = self.system_data.disturbance_set.copy()
-            num_disturbance = random.randint(self.min_disturbance, self.max_disturbance) # Generate k
+            num_disturbance = self.np_random.integers(low=self.min_disturbance, high=self.max_disturbance) # Generate k
             self.disturbance = []
             # Non-repetitive random sampling
             for _ in range(num_disturbance):
-                random_disturbance = random.choice(temp_disturbance_set)
+                random_disturbance = self.np_random.choice(temp_disturbance_set)
                 self.disturbance.append(random_disturbance)
                 temp_disturbance_set.remove(random_disturbance)
                 
