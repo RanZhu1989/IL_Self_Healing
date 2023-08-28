@@ -4,13 +4,14 @@ import numpy as np
 
 class System_Data():
     """System data struct for building environment """
-    def __init__(self, 
-                 file_name:str, # Excel fire name
-                 Sb:float = 100, # MW/MVar/MVA
-                 V0:float = 1.0, # p.u.
-                 V_max:float = 1.05, # p.u.
-                 V_min:float = 0.95
-                 ) -> None: 
+    def __init__(
+        self, 
+        file_name:str, # Excel fire name
+        Sb:float = 100, # MW/MVar/MVA
+        V0:float = 1.0, # p.u.
+        V_max:float = 1.05, # p.u.
+        V_min:float = 0.95
+    ) -> None: 
         """
         Args:
             file_name: the file name of the system data
@@ -116,7 +117,11 @@ class System_Data():
 
 
 # Utils for System_Data
-def make_mask(x:int, y:int, a_list:np.ndarray) -> np.ndarray:
+def make_mask(
+    x:int, 
+    y:int, 
+    a_list:np.ndarray
+) -> np.ndarray:
     """Make a 2-D mask matrix for converting No. of y to No. of x according to the list a_list.
 
     Args:
@@ -134,7 +139,10 @@ def make_mask(x:int, y:int, a_list:np.ndarray) -> np.ndarray:
         
     return mask
 
-def make_inc_matrix(start_node:np.ndarray, end_node:np.ndarray) -> np.ndarray:
+def make_inc_matrix(
+    start_node:np.ndarray, 
+    end_node:np.ndarray
+) -> np.ndarray:
     """Make the incidence matrix of node-branch
 
     Args:

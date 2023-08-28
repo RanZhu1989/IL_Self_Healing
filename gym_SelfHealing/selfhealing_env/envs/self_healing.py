@@ -24,15 +24,16 @@ class SelfHealing_Env(gym.Env):
     
     metadata = {'render_modes': ['human']}
     
-    def __init__(self, 
-                 data_file:str, 
-                 opt_framework:str = "JuMP",
-                 solver:Optional[str] = "cplex", 
-                 solver_display:bool = False, 
-                 vvo:bool = True, 
-                 min_disturbance:int = 1, 
-                 max_disturbance:int = 1
-                 ) -> None:
+    def __init__(
+        self, 
+        data_file:str, 
+        opt_framework:str = "JuMP",
+        solver:Optional[str] = "cplex", 
+        solver_display:bool = False, 
+        vvo:bool = True, 
+        min_disturbance:int = 1, 
+        max_disturbance:int = 1
+    ) -> None:
         """
         Initialize the environment.
         
@@ -156,9 +157,12 @@ class SelfHealing_Env(gym.Env):
         pass
     
     
-    def reset(self, 
-              options:dict = {"Specific_Disturbance": None, "Expert_Policy_Required": False},
-              seed:Optional[int] = None) -> Tuple[dict,dict]:
+    def reset(
+        self, 
+        options:dict = {"Specific_Disturbance": None, 
+                        "Expert_Policy_Required": False},
+        seed:Optional[int] = None
+    ) -> Tuple[dict,dict]:
         """
         Reset the environment.
         
@@ -354,7 +358,10 @@ class SelfHealing_Env(gym.Env):
         return self.obs, info
     
     
-    def step(self, action:Union[dict,int]) -> Tuple[dict, float, bool, dict]:
+    def step(
+        self, 
+        action:Union[dict,int]
+    ) -> Tuple[dict, float, bool, dict]:
         """
         Take an action and return the next observation and reward.
         
@@ -411,7 +418,7 @@ class SelfHealing_Env(gym.Env):
               (_step->step_)                                           thus, if idx>=4,          done keeps True
                                                                 done=True after transition
          --------------------------------------------------------------------------------------------------------------------------
-                                S# : state; A# : action; R#: reward 
+         S# : state; A# : action; R#: reward 
          _step: begin step(); step_: after step(); idx: exploration_index; step#: execution step() at step#
         """
         if self.exploration_index <= self.exploration_total-1:

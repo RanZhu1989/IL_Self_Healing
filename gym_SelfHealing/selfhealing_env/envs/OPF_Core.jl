@@ -35,7 +35,17 @@ struct OPF_Core
     step_model::JuMP.Model
     reset_model::JuMP.Model
     
-    function OPF_Core(args_expert, args_step)
+    function OPF_Core(
+        args_expert::Tuple{Int64, Int64, Int64, Int64, Int64, Matrix{Float64}, Int64,
+                                             Matrix{Float64},Matrix{Float64}, Matrix{Float64}, Int64, 
+                                             Float64, Float64, Float64, Matrix{Float64}, Matrix{Float64}, 
+                                             Matrix{Float64}, Matrix{Float64}, Matrix{Float64}, Matrix{Float64}, 
+                                             Matrix{Float64}, Int64, Matrix{Float64}, Int64},
+        args_step::Tuple{Int64, Int64, Int64, Int64, Int64, Matrix{Float64}, Int64, 
+                            Matrix{Float64},Vector{Float64}, Vector{Float64}, Int64, Float64, 
+                            Float64, Float64, Vector{Float64},Vector{Float64}, Vector{Float64}, 
+                            Vector{Float64}, Vector{Float64}, Vector{Float64},Vector{Float64}, Matrix{Float64}, Int64}
+        )::Nothing
         expert_model = make_expert_model(args_expert)
         step_model = make_step_model(args_step)
         reset_model = make_reset_model(args_step)
@@ -361,20 +371,22 @@ Servel utility functions are defined for managing the core in an external way:
     solve_*Model: Solve the corresponding Model
 """
 
-function init_opf_core(; args_expert::Tuple{Int64, Int64, Int64, Int64, Int64, Matrix{Float64}, Int64,
-                                             Matrix{Float64},Matrix{Float64}, Matrix{Float64}, Int64, 
-                                             Float64, Float64, Float64, Matrix{Float64}, Matrix{Float64}, 
-                                             Matrix{Float64}, Matrix{Float64}, Matrix{Float64}, Matrix{Float64}, 
-                                             Matrix{Float64}, Int64, Matrix{Float64}, Int64},
-                        args_step::Tuple{Int64, Int64, Int64, Int64, Int64, Matrix{Float64}, Int64, 
-                                            Matrix{Float64},Vector{Float64}, Vector{Float64}, Int64, Float64, 
-                                            Float64, Float64, Vector{Float64},Vector{Float64}, Vector{Float64}, 
-                                            Vector{Float64}, Vector{Float64}, Vector{Float64},Vector{Float64}, Matrix{Float64}, Int64},
-                        solver::String="CPLEX",
-                        MIP_gap_expert_model::Float64=1e-4,
-                        MIP_gap_step_model::Float64=1e-4,
-                        MIP_gap_reset_model::Float64=1e-4,
-                        display::Bool=true)::Nothing
+function init_opf_core(; 
+    args_expert::Tuple{Int64, Int64, Int64, Int64, Int64, Matrix{Float64}, Int64,
+                        Matrix{Float64},Matrix{Float64}, Matrix{Float64}, Int64, 
+                        Float64, Float64, Float64, Matrix{Float64}, Matrix{Float64}, 
+                        Matrix{Float64}, Matrix{Float64}, Matrix{Float64}, Matrix{Float64}, 
+                        Matrix{Float64}, Int64, Matrix{Float64}, Int64},
+    args_step::Tuple{Int64, Int64, Int64, Int64, Int64, Matrix{Float64}, Int64, 
+                        Matrix{Float64},Vector{Float64}, Vector{Float64}, Int64, Float64, 
+                        Float64, Float64, Vector{Float64},Vector{Float64}, Vector{Float64}, 
+                        Vector{Float64}, Vector{Float64}, Vector{Float64},Vector{Float64}, Matrix{Float64}, Int64},
+    solver::String="CPLEX",
+    MIP_gap_expert_model::Float64=1e-4,
+    MIP_gap_step_model::Float64=1e-4,
+    MIP_gap_reset_model::Float64=1e-4,
+    display::Bool=true
+    )::Nothing
     """
     We can not use jl.OPF_Core() thourgh JuliaPy interface. We use this function to initialize the core.
     
@@ -443,10 +455,12 @@ function set_dmg(a_input::Matrix{Float64})::Nothing
 
 end
 
-function set_ExpertModel(;X_tieline0_input::Vector{Float64},
-                        X_rec0_input::Vector{Int8},
-                        X_line0_input::Vector{Int8},
-                        vvo::Bool=true)::Nothing
+function set_ExpertModel(;
+    X_tieline0_input::Vector{Float64},
+    X_rec0_input::Vector{Int8},
+    X_line0_input::Vector{Int8},
+    vvo::Bool=true
+    )::Nothing
     """
     Set the initial state for expert model. The inputs are partly from the results of rest model.
     """
@@ -472,10 +486,12 @@ function set_ExpertModel(;X_tieline0_input::Vector{Float64},
     end
 end
 
-function set_StepModel(; X_rec0_input::Vector{Int8},
-                        X_tieline_input::Vector{Int8},
-                        Q_svc_input::Union{Vector{Float64},Nothing} =nothing,
-                        vvo::Bool=true)::Nothing
+function set_StepModel(; 
+    X_rec0_input::Vector{Int8},
+    X_tieline_input::Vector{Int8},
+    Q_svc_input::Union{Vector{Float64},Nothing} =nothing,
+    vvo::Bool=true
+    )::Nothing
     """
     Set the initial state for step model. The inputs are partly from the results of rest model or the pervious step model.
     """
@@ -505,7 +521,10 @@ function set_StepModel(; X_rec0_input::Vector{Int8},
 end
 
 
-function set_ResetModel(; X_tieline_input::Vector{Float64}, Q_svc_input::Vector{Float64})::Nothing
+function set_ResetModel(; 
+    X_tieline_input::Vector{Float64}, 
+    Q_svc_input::Vector{Float64}
+    )::Nothing
     """
     Set the parameters for reset model.
     """

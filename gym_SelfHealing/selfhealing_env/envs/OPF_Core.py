@@ -8,9 +8,15 @@ class OPF_Core:
     """
     This class is translated from OPF_Core.jl. For detailed docstring, please refer to Julia version.
     """
-    def __init__(self, args_expert:tuple, args_step:tuple, 
-                 MIP_gap_expert_model:float=1e-4, MIP_gap_step_model:float=1e-4,
-                 MIP_gap_reset_model:float=1e-4, display:bool=True) -> None:
+    def __init__(
+        self, 
+        args_expert:tuple, 
+        args_step:tuple, 
+        MIP_gap_expert_model:float=1e-4, 
+        MIP_gap_step_model:float=1e-4,
+        MIP_gap_reset_model:float=1e-4, 
+        display:bool=True
+    ) -> None:
         """
         Same as init_opf_core in OPF_Core.jl
         """
@@ -26,7 +32,10 @@ class OPF_Core:
         self.reset_model.setParam('MIPGap', MIP_gap_reset_model)
         pass
     
-    def make_expert_model(self, args_expert:tuple) -> gp.Model:
+    def make_expert_model(
+        self, 
+        args_expert:tuple
+    ) -> gp.Model:
         
         NT, N_Branch, N_TL, N_NL, N_Bus, pIn, N_DG, DG_Mask, R_Branch, X_Branch, Big_M_V, V0, \
             V_min, V_max, Pd, Qd, S_Branch, P_DG_min, P_DG_max, Q_DG_min, Q_DG_max, BigM_SC, BSDG_Mask, \
@@ -149,7 +158,10 @@ class OPF_Core:
         return expert_model
     
     
-    def make_step_model(self, args_step:tuple) -> gp.Model:
+    def make_step_model(
+        self, 
+        args_step:tuple
+    ) -> gp.Model:
         
         _, N_Branch, N_TL, N_NL, N_Bus, pIn, N_DG, DG_Mask, R_Branch, X_Branch, Big_M_V, V0, \
             V_min, V_max, Pd, Qd, S_Branch, P_DG_min, P_DG_max, Q_DG_min, \
@@ -251,7 +263,10 @@ class OPF_Core:
         return step_model
     
     
-    def make_reset_model(self,args_step:tuple) -> gp.Model:
+    def make_reset_model(
+        self,
+        args_step:tuple
+    ) -> gp.Model:
         
         _, N_Branch, N_TL, N_NL, N_Bus, pIn, N_DG, DG_Mask, R_Branch, X_Branch, Big_M_V, V0, \
             V_min, V_max, Pd, Qd, S_Branch, P_DG_min, P_DG_max, Q_DG_min, \
@@ -345,7 +360,10 @@ class OPF_Core:
         return reset_model
     
     
-    def set_dmg(self, a_input:np.ndarray) -> None:
+    def set_dmg(
+        self, 
+        a_input:np.ndarray
+    ) -> None:
         """
         Same as set_dmg in OPF_Core.jl
         """
@@ -354,7 +372,13 @@ class OPF_Core:
         _fixMvar(model=self.reset_model, mvar_name="a",shape=[a_input.shape[0]], value=a_input[:,0], cons_name="fix_a")
         
         
-    def set_ExpertModel(self, X_tieline0_input:np.ndarray, X_rec0_input:np.ndarray, X_line0_input:np.ndarray, vvo:bool=True) -> None:
+    def set_ExpertModel(
+        self, 
+        X_tieline0_input:np.ndarray, 
+        X_rec0_input:np.ndarray, 
+        X_line0_input:np.ndarray, 
+        vvo:bool=True
+    ) -> None:
         """
         Same as set_ExpertModel in OPF_Core.jl
         """
@@ -376,8 +400,13 @@ class OPF_Core:
                         value=np.zeros((self.N_DG-1,self.NT)), cons_name="fix_Q_svc")
                     
 
-    def set_StepModel(self, X_rec0_input:np.ndarray, X_tieline_input:np.ndarray,
-                      Q_svc_input:Optional[np.ndarray]=None, vvo:bool=True) -> None:
+    def set_StepModel(
+        self, 
+        X_rec0_input:np.ndarray, 
+        X_tieline_input:np.ndarray,
+        Q_svc_input:Optional[np.ndarray]=None, 
+        vvo:bool=True
+    ) -> None:
         """
         Same as set_StepModel in OPF_Core.jl
         """
@@ -402,7 +431,11 @@ class OPF_Core:
                         value=np.zeros(self.N_DG-1), cons_name="fix_Q_svc")
             
                
-    def set_ResetModel(self, X_tieline_input:np.ndarray, Q_svc_input:np.ndarray) -> None:
+    def set_ResetModel(
+        self, 
+        X_tieline_input:np.ndarray, 
+        Q_svc_input:np.ndarray
+    ) -> None:
         """
         Same as set_ResetModel in OPF_Core.jl
         """
@@ -499,7 +532,11 @@ _removeMvarConstrs      refer to JuMP.delete(model, con)        _getMvarByName
 
 """
 
-def _getMvarByName(model:gp.Model,mvar_name:str,shape:list) -> dict:
+def _getMvarByName(
+    model:gp.Model,
+    mvar_name:str,
+    shape:list
+) -> dict:
     """
     Mar version of getVarByName
 
@@ -527,7 +564,11 @@ def _getMvarByName(model:gp.Model,mvar_name:str,shape:list) -> dict:
     return mvars_
 
 
-def _getX_MvarByName(model:gp.Model,mvar_name:str,shape:list) -> np.ndarray:
+def _getX_MvarByName(
+    model:gp.Model,
+    mvar_name:str,
+    shape:list
+) -> np.ndarray:
     """
     Mvar version of Var.X. Currently only support 1D and 2D mvars.
 
@@ -556,7 +597,13 @@ def _getX_MvarByName(model:gp.Model,mvar_name:str,shape:list) -> np.ndarray:
     return res_X
 
 
-def _fixMvar(model:gp.Model, mvar_name:str, shape:list, value:np.ndarray, cons_name:str) -> None:
+def _fixMvar(
+    model:gp.Model, 
+    mvar_name:str, 
+    shape:list, 
+    value:np.ndarray, 
+    cons_name:str
+) -> None:
     """
     Mvar version of JuMP.fix(var, para)
 
@@ -587,7 +634,11 @@ def _fixMvar(model:gp.Model, mvar_name:str, shape:list, value:np.ndarray, cons_n
     model.update()
     
 
-def _removeMvarConstrs(model:gp.Model, cons_name:str, shape:list) -> None:
+def _removeMvarConstrs(
+    model:gp.Model,
+    cons_name:str, 
+    shape:list
+) -> None:
     """
     Mvar version of JuMP.delete(model, con)
 
