@@ -160,7 +160,8 @@ class SelfHealing_Env(gym.Env):
     def reset(
         self, 
         options:dict = {"Specific_Disturbance": None, 
-                        "Expert_Policy_Required": False},
+                        "Expert_Policy_Required": False,
+                        "External_Seed": False},
         seed:Optional[int] = None
     ) -> Tuple[dict,dict]:
         """
@@ -198,7 +199,8 @@ class SelfHealing_Env(gym.Env):
         
         disturbance = options["Specific_Disturbance"]
         expert_policy_required = options["Expert_Policy_Required"]
-        
+        external_seed = options["External_Seed"]
+                
         self.load_rate_episode = [] # Initialize a list to store the load recovered RATE during an episode
         self.exploration_index = 0 # index to determine the instants
         
@@ -206,11 +208,22 @@ class SelfHealing_Env(gym.Env):
         if disturbance == None:
             random_mode = True
             temp_disturbance_set = self.system_data.disturbance_set.copy()
-            num_disturbance = self.np_random.integers(low=self.min_disturbance, high=self.max_disturbance) # Generate k
+            
+            if external_seed:
+                num_disturbance = random.randint(self.min_disturbance, self.max_disturbance)
+            else:
+                if self.min_disturbance==self.min_disturbance:
+                    num_disturbance = self.min_disturbance
+                else:
+                    num_disturbance = self.np_random.integers(low=self.min_disturbance, high=self.max_disturbance) # Generate k
+                
             self.disturbance = []
             # Non-repetitive random sampling
             for _ in range(num_disturbance):
-                random_disturbance = self.np_random.choice(temp_disturbance_set)
+                if external_seed:
+                    random_disturbance = random.choice(temp_disturbance_set)
+                else:
+                    random_disturbance = self.np_random.choice(temp_disturbance_set)
                 self.disturbance.append(random_disturbance)
                 temp_disturbance_set.remove(random_disturbance)
                 
@@ -269,14 +282,15 @@ class SelfHealing_Env(gym.Env):
         
         # Record the initial observation
         self._x_load = np.round(_x_load).astype(np.int8) # Use round to avoid numerical error
+        branch_obs0 = np.concatenate((self.a[:,0].flatten(),_x_tieline)).astype(np.int8)
         if self.vvo:
-            self.obs = {"X_branch": np.concatenate((self.a[:,0].flatten(),_x_tieline)).astype(np.int8), 
+            self.obs = {"X_branch": branch_obs0, 
                 "X_load": self._x_load,
                 "PF": _PF.astype(np.float32),
                 "QF": _QF.astype(np.float32)
                 }
         else:
-            self.obs = np.concatenate((self.a[:,0].flatten(),_x_tieline)).astype(np.int8)
+            self.obs = branch_obs0
         
         self._x_tieline = np.round(_x_tieline).astype(np.int8)
         load_rate_current = load_value_current / self.system_data.Pd_all
@@ -326,6 +340,8 @@ class SelfHealing_Env(gym.Env):
             if solved_flag:
                 expert_b = np.round(expert_b).astype(np.int8)
                 expert_x_tieline = np.round(expert_x_tieline).astype(np.int8)
+                expert_x_branch = np.concatenate((self.a,expert_x_tieline)).astype(np.int8)
+                expert_branch_obs = np.concatenate((branch_obs0.reshape(-1, 1),expert_x_branch[:,:-1]), axis=1).astype(np.int8)
                 expert_x_load = np.round(expert_x_load).astype(np.int8)
                 expert_P_sub = expert_Pg[0,:]
                 expert_Q_sub = expert_Qg[0,:]
@@ -333,13 +349,27 @@ class SelfHealing_Env(gym.Env):
                 load_value_expert = load_value_expert.flatten()
                 expert_load_rate = load_value_expert / np.sum(self.system_data.Pd, axis=0)
                 
-                expert_policy = {"Branch_Energized": expert_b,
-                                "Load_Energized": expert_x_load,
-                                "TieLine_Action": expert_x_tieline,
-                                "P_sub": expert_P_sub,
-                                "Q_sub": expert_Q_sub,
-                                "Q_svc": expert_Q_svc,
-                                "Load_Rate": expert_load_rate}
+                # Calculate tieline action
+                expert_tieline_action = np.zeros(expert_x_tieline.shape[1], dtype=np.int8)
+                temp_expert_x_tieline = np.concatenate((X_tieline0.reshape(-1, 1), expert_x_tieline.copy()), axis=1) # Add initial tieline status
+                for col in range(1, temp_expert_x_tieline.shape[1]):
+                    diff = temp_expert_x_tieline[:, col] - temp_expert_x_tieline[:, col-1]
+                    row_indices = np.where(diff != 0)[0]
+                    if len(row_indices) > 0:
+                        expert_tieline_action[col-1] = row_indices[0] + 1
+                expert_tieline_action = np.expand_dims(expert_tieline_action, axis=1)
+                expert_policy = {
+                    "Branch_Energized": expert_b, 
+                    "Load_Energized": expert_x_load,
+                    "X_branch": expert_x_branch,
+                    "Branch_Obs": expert_branch_obs,
+                    "X_tieline": expert_x_tieline,
+                    "TieLine_Action": expert_tieline_action,
+                    "P_sub": expert_P_sub,
+                    "Q_sub": expert_Q_sub,
+                    "Q_svc": expert_Q_svc,
+                    "Load_Rate": expert_load_rate
+                    }
                 
                 # Otherwise, expert_policy keeps None
                                 
@@ -462,6 +492,7 @@ class SelfHealing_Env(gym.Env):
             
             # If infeasible, it means the tieline cannot be closed,
             # the tieline status remains unchanged, and the load will not be recovered
+            #NOTE: 'Soft-constraint' technologies are employed to distinguish different events
             if not solved:
                 event_log = "Infeasible Tieline Action"
                 reward = -1000
