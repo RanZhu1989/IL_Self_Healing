@@ -13,7 +13,8 @@ env = gym.make("SelfHealing-v0",
                vvo=False)
 reset_option = {
     "Specific_Disturbance": [12,17,21],
-    "Expert_Policy_Required": True
+    "Expert_Policy_Required": True,
+    "External_RNG": False
 }
 obs,info = env.reset(options=reset_option)
 # obs,info = env.reset(disturbance=[3,9,14,21,23])

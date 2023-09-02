@@ -32,7 +32,11 @@ class SelfHealing_Env(gym.Env):
         solver_display:bool = False, 
         vvo:bool = True, 
         min_disturbance:int = 1, 
-        max_disturbance:int = 1
+        max_disturbance:int = 1,
+        Sb = 100,
+        V0 = 1.0,
+        V_min = 0.95,
+        V_max = 1.05
     ) -> None:
         """
         Initialize the environment.
@@ -81,7 +85,7 @@ class SelfHealing_Env(gym.Env):
         
         # Read system data
         file_name = os.path.join(os.path.dirname(__file__), "case_data",data_file)
-        self.system_data = System_Data(file_name=file_name)
+        self.system_data = System_Data(file_name=file_name, Sb=Sb, V0=V0, V_min=V_min, V_max=V_max)
         varcon_lower_limit = self.system_data.Qsvc_lower_limit
         varcon_upper_limit = self.system_data.Qsvc_upper_limit
         
@@ -156,12 +160,12 @@ class SelfHealing_Env(gym.Env):
         
         pass
     
-    
+    #TODO Update docstring
     def reset(
         self, 
         options:dict = {"Specific_Disturbance": None, 
                         "Expert_Policy_Required": False,
-                        "External_Seed": False},
+                        "External_RNG": None},
         seed:Optional[int] = None
     ) -> Tuple[dict,dict]:
         """
@@ -171,6 +175,7 @@ class SelfHealing_Env(gym.Env):
             options: options := {
                                 "Specific_Disturbance": list or None
                                 "Expert_Policy_Required": bool
+                                "External_RNG": np.random.Random or None
                                 }
                     
                     If you want to use a SPECIFIC disturbance, use the following option:
@@ -199,7 +204,7 @@ class SelfHealing_Env(gym.Env):
         
         disturbance = options["Specific_Disturbance"]
         expert_policy_required = options["Expert_Policy_Required"]
-        external_seed = options["External_Seed"]
+        external_rng = options["External_RNG"]
                 
         self.load_rate_episode = [] # Initialize a list to store the load recovered RATE during an episode
         self.exploration_index = 0 # index to determine the instants
@@ -209,8 +214,8 @@ class SelfHealing_Env(gym.Env):
             random_mode = True
             temp_disturbance_set = self.system_data.disturbance_set.copy()
             
-            if external_seed:
-                num_disturbance = random.randint(self.min_disturbance, self.max_disturbance)
+            if external_rng is not None:
+                num_disturbance = external_rng.randint(self.min_disturbance, self.max_disturbance)
             else:
                 if self.min_disturbance==self.min_disturbance:
                     num_disturbance = self.min_disturbance
@@ -220,8 +225,8 @@ class SelfHealing_Env(gym.Env):
             self.disturbance = []
             # Non-repetitive random sampling
             for _ in range(num_disturbance):
-                if external_seed:
-                    random_disturbance = random.choice(temp_disturbance_set)
+                if external_rng is not None:
+                    random_disturbance = external_rng.choice(temp_disturbance_set)
                 else:
                     random_disturbance = self.np_random.choice(temp_disturbance_set)
                 self.disturbance.append(random_disturbance)

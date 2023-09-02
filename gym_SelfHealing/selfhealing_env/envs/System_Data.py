@@ -57,7 +57,7 @@ class System_Data():
         X_Branch0 = Branch_Data[:, 4] / Zb
         # SZ_Branch0 = R_Branch0 ** 2 + X_Branch0 ** 2
         S_Branch0 = Branch_Data[:, 5] / Sb
-        self.disturbance_set = np.where(Branch_Data[:, 7] == 1)[0].tolist() # Potential disturbance lines
+        self.disturbance_set = (np.where(Branch_Data[:, 7] == 1)[0]+1).tolist() # Potential disturbance lines
 
         # Read DG data
         DG_Data = pd.read_excel(file_name,sheet_name='DG').to_numpy()

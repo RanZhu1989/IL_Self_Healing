@@ -6,3 +6,5 @@ tempCodeRunnerFile.python
 dist
 build
 results/
+*.log
+/plot/*.csv
