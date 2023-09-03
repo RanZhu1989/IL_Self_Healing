@@ -1,14 +1,14 @@
 """Gym entry point for SelfHealing_Env environment."""
-import gymnasium as gym
-from gymnasium import spaces
-from gymnasium.utils import seeding
-from .System_Data import System_Data
-from julia import Main as jl
 import os
-import numpy as np
 import random
 from typing import Optional, Tuple, Union 
 import warnings
+
+import gymnasium as gym
+from gymnasium import spaces
+from .System_Data import System_Data
+from julia import Main as jl
+import numpy as np
 
 try:
     from .OPF_Core import OPF_Core
@@ -85,7 +85,9 @@ class SelfHealing_Env(gym.Env):
         
         # Read system data
         file_name = os.path.join(os.path.dirname(__file__), "case_data",data_file)
-        self.system_data = System_Data(file_name=file_name, Sb=Sb, V0=V0, V_min=V_min, V_max=V_max)
+        self.system_data = System_Data(
+                            file_name=file_name, Sb=Sb, V0=V0, V_min=V_min, V_max=V_max
+        )
         varcon_lower_limit = self.system_data.Qsvc_lower_limit
         varcon_upper_limit = self.system_data.Qsvc_upper_limit
         
@@ -113,15 +115,16 @@ class SelfHealing_Env(gym.Env):
         if self.opt_framework == "JuMP":
             jl.eval("using " + self.solver) # Load solver
             jl.include(os.path.join(os.path.dirname(__file__),"OPF_Core.jl"))
-            jl.init_opf_core(args_expert=self.system_data.args_expert,
-                             args_step=self.system_data.args_step,
-                             solver=self.solver,
-                             display=solver_display)
+            jl.init_opf_core(
+                args_expert=self.system_data.args_expert, args_step=self.system_data.args_step,
+                solver=self.solver, display=solver_display
+            )
             
         elif self.opt_framework == "Gurobipy":
-            self.core = OPF_Core(args_expert=self.system_data.args_expert,
-                                 args_step=self.system_data.args_step,
-                                 display=solver_display)
+            self.core = OPF_Core(
+                args_expert=self.system_data.args_expert, args_step=self.system_data.args_step,
+                display=solver_display
+            )
             
         else:
             #NOTE You can add other optimization frameworks here.
@@ -146,21 +149,20 @@ class SelfHealing_Env(gym.Env):
             self.action_space = spaces.Dict({
                 "Tieline": spaces.Discrete(self.system_data.N_TL + 1), # 1 to 5: open tieline 1 to 5; 0: do nothing
                 "Varcon": spaces.Box(low=np.array(varcon_lower_limit), high=np.array(varcon_upper_limit))
-                })
+            })
             
             self.observation_space = spaces.Dict({
                 "X_branch": spaces.MultiBinary(self.system_data.N_Branch), # Branch status
                 "X_load": spaces.MultiBinary(self.system_data.N_Bus), # Load pick up status
                 "PF": spaces.Box(low=self.system_data.S_lower_limit, high=self.system_data.S_upper_limit), # Branch power flow
                 "QF": spaces.Box(low=self.system_data.S_lower_limit, high=self.system_data.S_upper_limit)
-                })
+            })
         else:
             self.action_space = spaces.Discrete(self.system_data.N_TL + 1)
             self.observation_space = spaces.MultiBinary(self.system_data.N_Branch) 
         
         pass
     
-    #TODO Update docstring
     def reset(
         self, 
         options:dict = {"Specific_Disturbance": None, 
@@ -177,23 +179,33 @@ class SelfHealing_Env(gym.Env):
                                 "Expert_Policy_Required": bool
                                 "External_RNG": np.random.Random or None
                                 }
-                    
-                    If you want to use a SPECIFIC disturbance, use the following option:
-                    "Specific_Disturbance": list of # of line, e.g: [6,11,29,32]
-                    
-                    Otherwise, you should use the following option to generate a RANDOM disturbance:
-                    "Specific_Disturbance": None
-                    
-                    !! WARNING: Given the list = [] does not mean random disturbance, 
-                                it means the environment will be reset to the original state !!
-                    
-                    The reset function can also return the expert policy if you set "Expert_Policy_Required" to True.
+                            ------------------"Specific_Disturbance"--------------------------------------------------
+                            If you want to use a SPECIFIC disturbance, use the following option:
+                            "Specific_Disturbance": list of # of line, e.g: [6,11,29,32]
+                            
+                            Otherwise, you should use the following option to generate a RANDOM disturbance:
+                            "Specific_Disturbance": None
+                            
+                            !! WARNING: Given the list = [] does not mean random disturbance, 
+                                        it means the environment will be reset to the original state !!
+                            
+                            ------------------"Expert_Policy_Required"-----------------------------------------------
+                            The reset function can also return the expert policy if you set "Expert_Policy_Required" to True.
+                            
+                            ------------------"External_RNG"--------------------------------------------------------
+                            If you want to use an external random number generator, you should create a random.Random object 
+                            and pass it to the environment.
+                            e.g. 
+                                import random
+                                seed = 0
+                                my_rng = random.Random(seed)
+                                env.reset(options={"Specific_Disturbance": None, "Expert_Policy_Required": False, "External_RNG": my_rng})
             
             
             seed: Random seed for the environment. 
-                  !! WARNING: This parameter is only used for the first reset. 
+                  !! WARNING: This parameter is only used for *in-build* RNG for the first reset. 
                                 You should NOT use this parameter for subsequent resets !!
-                                
+                                                     
         Returns:
             obs: The initial observation.   
             
@@ -287,13 +299,15 @@ class SelfHealing_Env(gym.Env):
         
         # Record the initial observation
         self._x_load = np.round(_x_load).astype(np.int8) # Use round to avoid numerical error
+        # Returned obs. 
         branch_obs0 = np.concatenate((self.a[:,0].flatten(),_x_tieline)).astype(np.int8)
         if self.vvo:
-            self.obs = {"X_branch": branch_obs0, 
+            self.obs = {
+                "X_branch": branch_obs0, 
                 "X_load": self._x_load,
                 "PF": _PF.astype(np.float32),
                 "QF": _QF.astype(np.float32)
-                }
+            }
         else:
             self.obs = branch_obs0
         
@@ -309,9 +323,13 @@ class SelfHealing_Env(gym.Env):
         Set VVO mode: vvo -> expert model
         """
         if self.opt_framework == "JuMP":
-            jl.set_ExpertModel(X_tieline0_input=X_tieline0,X_rec0_input=self._x_load,X_line0_input=self._x_nl,vvo=self.vvo) # 设置Expert模型的初始状态
+            jl.set_ExpertModel(
+                X_tieline0_input=X_tieline0, X_rec0_input=self._x_load, X_line0_input=self._x_nl, vvo=self.vvo
+            )
         elif self.opt_framework == "Gurobipy":
-            self.core.set_ExpertModel(X_tieline0_input=X_tieline0,X_rec0_input=self._x_load,X_line0_input=self._x_nl,vvo=self.vvo)
+            self.core.set_ExpertModel(
+                X_tieline0_input=X_tieline0, X_rec0_input=self._x_load, X_line0_input=self._x_nl, vvo=self.vvo
+            )
         else:
             #NOTE Add other optimization frameworks here.
             raise Exception("Optimization framework not supported!")
@@ -324,10 +342,12 @@ class SelfHealing_Env(gym.Env):
             Return: 
                     solved_flag: whether the expert model is solved successfully
                     ----------(for each time step)-------------
-                   | expert_b: branch status
+                   | expert_b: branch ENERGIZED status (AFTER the action)
                    | expert_x_tieline: tieline ACTIONS
+                   | expert_x_branch: branch status (AFTER the action)
+                   | expert_branch_obs: branch OBSERVATION (BEFORE the action)
                    | expert_x_load: load pick up ACTIONS
-                   | expert_Pg: generator active power output
+                   | expert_Pg: generator active power output 
                    | expert_Qg: generator reactive power output
                    | load_value_expert: total load recovered
             """
@@ -364,34 +384,33 @@ class SelfHealing_Env(gym.Env):
                         expert_tieline_action[col-1] = row_indices[0] + 1
                 expert_tieline_action = np.expand_dims(expert_tieline_action, axis=1)
                 expert_policy = {
-                    "Branch_Energized": expert_b, 
-                    "Load_Energized": expert_x_load,
-                    "X_branch": expert_x_branch,
-                    "Branch_Obs": expert_branch_obs,
-                    "X_tieline": expert_x_tieline,
-                    "TieLine_Action": expert_tieline_action,
-                    "P_sub": expert_P_sub,
-                    "Q_sub": expert_Q_sub,
-                    "Q_svc": expert_Q_svc,
-                    "Load_Rate": expert_load_rate
-                    }
+                    "Branch_Energized": expert_b,               # np.ndarray
+                    "Load_Energized": expert_x_load,            # np.ndarray
+                    "X_branch": expert_x_branch,                # np.ndarray
+                    "Branch_Obs": expert_branch_obs,            # np.ndarray
+                    "X_tieline": expert_x_tieline,              # np.ndarray
+                    "TieLine_Action": expert_tieline_action,    # np.ndarray
+                    "P_sub": expert_P_sub,                      # np.ndarray
+                    "Q_sub": expert_Q_sub,                      # np.ndarray
+                    "Q_svc": expert_Q_svc,                      # np.ndarray
+                    "Load_Rate": expert_load_rate               # np.ndarray    
+                }
                 
                 # Otherwise, expert_policy keeps None
                                 
         # Construct info
         info = {
-            "VVO_Enabled": self.vvo,
-            "Specific_Disturbance": not random_mode,
-            "k of N-k": num_disturbance,
-            "Disturbance_Set": self.disturbance,
-            "Episode_Length": self.exploration_total,
-            "Recovered_Load_Rate_S0": load_rate_current,
-            "Expert_Policy_Required": expert_policy_required,
-            "Expert_Policy": expert_policy
+            "VVO_Enabled": self.vvo,                            # bool
+            "Specific_Disturbance": not random_mode,            # bool
+            "k of N-k": num_disturbance,                        # int
+            "Disturbance_Set": self.disturbance,                # list
+            "Episode_Length": self.exploration_total,           # int
+            "Recovered_Load_Rate_S0": load_rate_current,        # float
+            "Expert_Policy_Required": expert_policy_required,   # bool
+            "Expert_Policy": expert_policy                      # dict
         }
         
         return self.obs, info
-    
     
     def step(
         self, 
@@ -480,12 +499,16 @@ class SelfHealing_Env(gym.Env):
                 e_Qsvc: track error of SVC command
             """
             if self.opt_framework == "JuMP":
-                jl.set_StepModel(X_rec0_input=self._x_load, X_tieline_input=x_tieline_input, 
-                                Q_svc_input=q_svc_input, vvo=self.vvo)
+                jl.set_StepModel(
+                    X_rec0_input=self._x_load, X_tieline_input=x_tieline_input, 
+                    Q_svc_input=q_svc_input, vvo=self.vvo
+                )
                 results = jl.solve_StepModel()
             elif self.opt_framework == "Gurobipy":
-                self.core.set_StepModel(X_rec0_input=self._x_load, X_tieline_input=x_tieline_input, 
-                                Q_svc_input=q_svc_input, vvo=self.vvo)
+                self.core.set_StepModel(
+                    X_rec0_input=self._x_load, X_tieline_input=x_tieline_input, 
+                    Q_svc_input=q_svc_input, vvo=self.vvo
+                )
                 results = self.core.solve_StepModel()
             else:
                 #NOTE Add other optimization frameworks here.
@@ -501,7 +524,7 @@ class SelfHealing_Env(gym.Env):
             if not solved:
                 event_log = "Infeasible Tieline Action"
                 reward = -1000
-                self.load_rate_episode.append(self.load_rate_episode[-1]) # 负荷不回复，保持上一步状态
+                self.load_rate_episode.append(self.load_rate_episode[-1])
             else:
                 # Check if the action is valid
                 _x_nl = np.round(_b[0:self.system_data.N_NL-1]).astype(np.int8)
@@ -532,11 +555,12 @@ class SelfHealing_Env(gym.Env):
                     self.load_rate_episode.append(load_rate_new) # Append load recovered rate to the list
                     
                     if self.vvo:
-                        self.obs = {"X_branch": np.concatenate((self.a[:,0].flatten(),self._x_tieline)).astype(np.int8),
-                                    "X_load": self._x_load,
-                                    "PF": _PF.astype(np.float32),
-                                    "QF": _QF.astype(np.float32)
-                                    }
+                        self.obs = {
+                            "X_branch": np.concatenate((self.a[:,0].flatten(),self._x_tieline)).astype(np.int8),
+                            "X_load": self._x_load,
+                            "PF": _PF.astype(np.float32),
+                            "QF": _QF.astype(np.float32)
+                        }
                     else:
                         self.obs = np.concatenate((self.a[:,0].flatten(),self._x_tieline)).astype(np.int8)
         else:
@@ -548,20 +572,19 @@ class SelfHealing_Env(gym.Env):
         self.exploration_index += 1
         
         # Construct info
-        info = {"Attempted_Tieline_Action": action_tieline,
-                "Action_Accepted": action_accepted,
-                "Interaction_Step": self.exploration_index,
-                "Event_Log": event_log,
-                "Recovered_Load_Rate": self.load_rate_episode[-1]
+        info = {
+            "Attempted_Tieline_Action": action_tieline,             # int
+            "Action_Accepted": action_accepted,                     # bool
+            "Interaction_Step": self.exploration_index,             # int   
+            "Event_Log": event_log,                                 # str
+            "Recovered_Load_Rate": self.load_rate_episode[-1]       # float
         }
         
         return self.obs, reward, done, False, info
     
-    
     def render(self):
         #TODO Add visualization using NetworkX
         pass
-    
     
     def close(self):
         pass

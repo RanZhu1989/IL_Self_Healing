@@ -23,7 +23,7 @@ class System_Data():
         # Base values
         Vb = pd.read_excel(file_name,sheet_name='Base').to_numpy().item()
         # Ib = Sb/(math.sqrt(3)*Vb)   # kA
-        Zb = Vb**2/Sb           # O
+        Zb = Vb**2/Sb           # Ohm
         
         # BigM
         Big_M_FF = 40 # BigM for commodity flow
@@ -57,7 +57,7 @@ class System_Data():
         X_Branch0 = Branch_Data[:, 4] / Zb
         # SZ_Branch0 = R_Branch0 ** 2 + X_Branch0 ** 2
         S_Branch0 = Branch_Data[:, 5] / Sb
-        self.disturbance_set = (np.where(Branch_Data[:, 7] == 1)[0]+1).tolist() # Potential disturbance lines
+        self.disturbance_set = (np.where(Branch_Data[:, 7] == 1)[0] + 1).tolist() # Potential disturbance branch set
 
         # Read DG data
         DG_Data = pd.read_excel(file_name,sheet_name='DG').to_numpy()
@@ -104,14 +104,16 @@ class System_Data():
         self.Qd = Qd
         self.Pd_all = Pd_all
         
-        self.args_expert = (NT, N_Branch, N_TL, N_NL, N_Bus, pIn, N_DG, DG_Mask, R_Branch, X_Branch, Big_M_V, V0,
-                V_min, V_max, Pd, Qd, S_Branch, P_DG_min, P_DG_max, Q_DG_min, Q_DG_max, BigM_SC, BSDG_Mask,
-                Big_M_FF)
-
+        self.args_expert = (
+            NT, N_Branch, N_TL, N_NL, N_Bus, pIn, N_DG, DG_Mask, R_Branch, X_Branch, Big_M_V, V0, V_min, 
+            V_max, Pd, Qd, S_Branch, P_DG_min, P_DG_max, Q_DG_min, Q_DG_max, BigM_SC, BSDG_Mask, Big_M_FF
+        )
         # NT=1 for step\reset model
-        self.args_step = (1, N_Branch, N_TL, N_NL, N_Bus, pIn, N_DG, DG_Mask, R_Branch[:, 0], X_Branch[:, 0], Big_M_V, V0,
-                V_min, V_max, Pd[:, 0], Qd[:, 0], S_Branch[:, 0], P_DG_min[:, 0], P_DG_max[:, 0], Q_DG_min[:, 0],
-                Q_DG_max[:, 0], BSDG_Mask, Big_M_FF)
+        self.args_step = (
+            1, N_Branch, N_TL, N_NL, N_Bus, pIn, N_DG, DG_Mask, R_Branch[:, 0], X_Branch[:, 0], Big_M_V, V0,
+            V_min, V_max, Pd[:, 0], Qd[:, 0], S_Branch[:, 0], P_DG_min[:, 0], P_DG_max[:, 0], Q_DG_min[:, 0],
+            Q_DG_max[:, 0], BSDG_Mask, Big_M_FF
+        )
         pass
 
 

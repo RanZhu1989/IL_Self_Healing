@@ -7,4 +7,3 @@ dist
 build
 results/
 *.log
-/plot/*.csv

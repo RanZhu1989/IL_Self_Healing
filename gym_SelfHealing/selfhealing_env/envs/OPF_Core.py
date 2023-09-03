@@ -1,8 +1,8 @@
 """Core OPF models for SelfHealingEnv using Gurobipy"""
+from typing import Optional, Tuple 
 import numpy as np
 import gurobipy as gp
 from gurobipy import GRB
-from typing import Optional, Tuple 
 
 class OPF_Core:
     """
@@ -38,8 +38,8 @@ class OPF_Core:
     ) -> gp.Model:
         
         NT, N_Branch, N_TL, N_NL, N_Bus, pIn, N_DG, DG_Mask, R_Branch, X_Branch, Big_M_V, V0, \
-            V_min, V_max, Pd, Qd, S_Branch, P_DG_min, P_DG_max, Q_DG_min, Q_DG_max, BigM_SC, BSDG_Mask, \
-            Big_M_FF = args_expert
+        V_min, V_max, Pd, Qd, S_Branch, P_DG_min, P_DG_max, Q_DG_min, Q_DG_max, BigM_SC, BSDG_Mask, \
+        Big_M_FF = args_expert
         
         # Several parameters for utility functions
         self.N_DG = N_DG
@@ -157,15 +157,14 @@ class OPF_Core:
                 
         return expert_model
     
-    
     def make_step_model(
         self, 
         args_step:tuple
     ) -> gp.Model:
         
         _, N_Branch, N_TL, N_NL, N_Bus, pIn, N_DG, DG_Mask, R_Branch, X_Branch, Big_M_V, V0, \
-            V_min, V_max, Pd, Qd, S_Branch, P_DG_min, P_DG_max, Q_DG_min, \
-            Q_DG_max, BSDG_Mask, Big_M_FF = args_step
+        V_min, V_max, Pd, Qd, S_Branch, P_DG_min, P_DG_max, Q_DG_min, \
+        Q_DG_max, BSDG_Mask, Big_M_FF = args_step
         
         step_model = gp.Model("Step_Model")
         
@@ -262,15 +261,14 @@ class OPF_Core:
         
         return step_model
     
-    
     def make_reset_model(
         self,
         args_step:tuple
     ) -> gp.Model:
         
         _, N_Branch, N_TL, N_NL, N_Bus, pIn, N_DG, DG_Mask, R_Branch, X_Branch, Big_M_V, V0, \
-            V_min, V_max, Pd, Qd, S_Branch, P_DG_min, P_DG_max, Q_DG_min, \
-            Q_DG_max, BSDG_Mask, Big_M_FF = args_step
+        V_min, V_max, Pd, Qd, S_Branch, P_DG_min, P_DG_max, Q_DG_min, \
+        Q_DG_max, BSDG_Mask, Big_M_FF = args_step
         
         reset_model = gp.Model("Reset_Model")
         
@@ -359,7 +357,6 @@ class OPF_Core:
         
         return reset_model
     
-    
     def set_dmg(
         self, 
         a_input:np.ndarray
@@ -367,10 +364,18 @@ class OPF_Core:
         """
         Same as set_dmg in OPF_Core.jl
         """
-        _fixMvar(model=self.expert_model, mvar_name="a",shape=list(a_input.shape), value=a_input, cons_name="fix_a")      
-        _fixMvar(model=self.step_model, mvar_name="a",shape=[a_input.shape[0]], value=a_input[:,0], cons_name="fix_a") 
-        _fixMvar(model=self.reset_model, mvar_name="a",shape=[a_input.shape[0]], value=a_input[:,0], cons_name="fix_a")
-        
+        _fixMvar(
+            model=self.expert_model, mvar_name="a", shape=list(a_input.shape), 
+            value=a_input, cons_name="fix_a"
+        )      
+        _fixMvar(
+            model=self.step_model, mvar_name="a", shape=[a_input.shape[0]], 
+            value=a_input[:,0], cons_name="fix_a"
+        ) 
+        _fixMvar(
+            model=self.reset_model, mvar_name="a", shape=[a_input.shape[0]], 
+            value=a_input[:,0], cons_name="fix_a"
+        )
         
     def set_ExpertModel(
         self, 
@@ -382,24 +387,27 @@ class OPF_Core:
         """
         Same as set_ExpertModel in OPF_Core.jl
         """
-        _fixMvar(model=self.expert_model, 
-                    mvar_name="X_tieline0",shape=list(X_tieline0_input.shape), 
-                    value=X_tieline0_input, cons_name="fix_X_tieline")
+        _fixMvar(
+            model=self.expert_model, mvar_name="X_tieline0", shape=list(X_tieline0_input.shape), 
+            value=X_tieline0_input, cons_name="fix_X_tieline"
+        )
         
-        _fixMvar(model=self.expert_model,
-                    mvar_name="X_rec0",shape=list(X_rec0_input.shape),
-                    value=X_rec0_input, cons_name="fix_X_rec0")
+        _fixMvar(
+            model=self.expert_model, mvar_name="X_rec0", shape=list(X_rec0_input.shape),
+            value=X_rec0_input, cons_name="fix_X_rec0"
+        )
         
-        _fixMvar(model=self.expert_model,
-                    mvar_name="X_line0",shape=list(X_line0_input.shape),
-                    value=X_line0_input, cons_name="fix_X_line")
+        _fixMvar(
+            model=self.expert_model, mvar_name="X_line0", shape=list(X_line0_input.shape),
+            value=X_line0_input, cons_name="fix_X_line"
+        )
         
         if not vvo:
-            _fixMvar(model=self.expert_model, 
-                        mvar_name="Q_svc",shape=[self.N_DG-1,self.NT], 
-                        value=np.zeros((self.N_DG-1,self.NT)), cons_name="fix_Q_svc")
+            _fixMvar(
+                model=self.expert_model, mvar_name="Q_svc",shape=[self.N_DG-1,self.NT], 
+                value=np.zeros((self.N_DG-1,self.NT)), cons_name="fix_Q_svc"
+            )
                     
-
     def set_StepModel(
         self, 
         X_rec0_input:np.ndarray, 
@@ -413,24 +421,27 @@ class OPF_Core:
         if vvo & (Q_svc_input==None):
             raise ValueError("Please provide a value for Q_svc_input when vvo mode is set to true.")
         
-        _fixMvar(model=self.step_model, 
-                    mvar_name="X_rec0",shape=list(X_rec0_input.shape),
-                    value=X_rec0_input, cons_name="fix_X_rec0")
+        _fixMvar(
+            model=self.step_model, mvar_name="X_rec0", shape=list(X_rec0_input.shape),
+            value=X_rec0_input, cons_name="fix_X_rec0"
+        )
         
-        _fixMvar(model=self.step_model,
-                    mvar_name="X_tieline",shape=list(X_tieline_input.shape),
-                    value=X_tieline_input, cons_name="fix_X_tieline")
+        _fixMvar(
+            model=self.step_model, mvar_name="X_tieline", shape=list(X_tieline_input.shape),
+            value=X_tieline_input, cons_name="fix_X_tieline"
+        )
         
         if vvo:
-            _fixMvar(model=self.step_model,
-                        mvar_name="Q_svc",shape=list(Q_svc_input.shape),
-                        value=Q_svc_input, cons_name="fix_Q_svc")
+            _fixMvar(
+                model=self.step_model, mvar_name="Q_svc", shape=list(Q_svc_input.shape),
+                value=Q_svc_input, cons_name="fix_Q_svc"
+            )
         else:
-            _fixMvar(model=self.step_model, 
-                        mvar_name="Q_svc",shape=[self.N_DG-1], 
-                        value=np.zeros(self.N_DG-1), cons_name="fix_Q_svc")
-            
-               
+            _fixMvar(
+                model=self.step_model, mvar_name="Q_svc", shape=[self.N_DG-1], 
+                value=np.zeros(self.N_DG-1), cons_name="fix_Q_svc"
+            )
+                 
     def set_ResetModel(
         self, 
         X_tieline_input:np.ndarray, 
@@ -439,15 +450,16 @@ class OPF_Core:
         """
         Same as set_ResetModel in OPF_Core.jl
         """
-        _fixMvar(model=self.reset_model,
-                    mvar_name="X_tieline",shape=list(X_tieline_input.shape),
-                    value=X_tieline_input, cons_name="fix_X_tieline")
+        _fixMvar(
+            model=self.reset_model, mvar_name="X_tieline", shape=list(X_tieline_input.shape),
+            value=X_tieline_input, cons_name="fix_X_tieline"
+        )
         
-        _fixMvar(model=self.reset_model,
-                    mvar_name="Q_svc",shape=list(Q_svc_input.shape),
-                    value=Q_svc_input, cons_name="fix_Q_svc")
-    
-
+        _fixMvar(
+            model=self.reset_model, mvar_name="Q_svc", shape=list(Q_svc_input.shape),
+            value=Q_svc_input, cons_name="fix_Q_svc"
+        )
+        
     def solve_ExpertModel(self) -> Tuple[bool, Optional[np.ndarray], Optional[np.ndarray], Optional[np.ndarray], 
                                          Optional[np.ndarray], Optional[np.ndarray], Optional[np.ndarray]]:
         """
@@ -462,16 +474,18 @@ class OPF_Core:
             x_load = _getX_MvarByName(model=self.expert_model, mvar_name="X_rec", shape=[self.N_Bus,self.NT])
             PF = _getX_MvarByName(model=self.expert_model, mvar_name="PF", shape=[self.N_Branch,self.NT])
             QF = _getX_MvarByName(model=self.expert_model, mvar_name="QF", shape=[self.N_Branch,self.NT])
-            Prec = np.sum(_getX_MvarByName(model=self.expert_model, mvar_name="Pd_rec", shape=[self.N_Bus,self.NT]), axis=0)
+            Prec = np.sum(
+                _getX_MvarByName(model=self.expert_model, mvar_name="Pd_rec", shape=[self.N_Bus,self.NT]), 
+                axis=0
+            )
         
             return solved_flag, b, x_tieline, x_load, PF, QF, Prec
         else:
             return solved_flag, None, None, None, None, None, None
     
-    
     def solve_StepModel(self) -> Tuple[bool, Optional[np.ndarray], Optional[np.ndarray], 
                                        Optional[np.ndarray], Optional[np.ndarray], Optional[np.ndarray],
-                                       Optional[np.ndarray], Optional[np.ndarray] ]:
+                                       Optional[np.ndarray], Optional[np.ndarray]]:
         """
         Same as solve_StepModel in OPF_Core.jl
         """
@@ -486,8 +500,10 @@ class OPF_Core:
             PF = _getX_MvarByName(model=self.step_model, mvar_name="PF", shape=[self.N_Branch])
             QF = _getX_MvarByName(model=self.step_model, mvar_name="QF", shape=[self.N_Branch])
             Prec = np.sum(_getX_MvarByName(model=self.step_model, mvar_name="Pd_rec", shape=[self.N_Bus]))
-            e_Qsvc = np.sum(_getX_MvarByName(model=self.step_model, mvar_name="e_Qsvc_up", shape=[self.N_DG-1])
-                            + _getX_MvarByName(model=self.step_model, mvar_name="e_Qsvc_down", shape=[self.N_DG-1]))
+            e_Qsvc = np.sum(
+                _getX_MvarByName(model=self.step_model, mvar_name="e_Qsvc_up", shape=[self.N_DG-1])
+                + _getX_MvarByName(model=self.step_model, mvar_name="e_Qsvc_down", shape=[self.N_DG-1])
+            )
             
             return solved_flag, b, x_tieline, x_load, PF, QF, Prec, e_Qsvc
         
@@ -495,7 +511,6 @@ class OPF_Core:
             
             return solved_flag, None, None, None, None, None, None, None
             
-    
     def solve_ResetModel(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         """
         Same as solve_ResetModel in OPF_Core.jl
@@ -510,6 +525,7 @@ class OPF_Core:
         Prec = np.sum(_getX_MvarByName(model=self.reset_model, mvar_name="Pd_rec", shape=[self.N_Bus]))
         
         return b, x_tieline, x_load, PF, QF, Prec
+    
     
     
 """------------Utils for gurobipy v10---------------------
@@ -563,7 +579,6 @@ def _getMvarByName(
         
     return mvars_
 
-
 def _getX_MvarByName(
     model:gp.Model,
     mvar_name:str,
@@ -595,7 +610,6 @@ def _getX_MvarByName(
         raise ValueError("Currently only 1D and 2D mvars are supported")
     
     return res_X
-
 
 def _fixMvar(
     model:gp.Model, 
@@ -633,7 +647,6 @@ def _fixMvar(
     
     model.update()
     
-
 def _removeMvarConstrs(
     model:gp.Model,
     cons_name:str, 

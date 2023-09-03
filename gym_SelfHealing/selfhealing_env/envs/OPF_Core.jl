@@ -37,15 +37,16 @@ struct OPF_Core
     
     function OPF_Core(
         args_expert::Tuple{Int64, Int64, Int64, Int64, Int64, Matrix{Float64}, Int64,
-                                             Matrix{Float64},Matrix{Float64}, Matrix{Float64}, Int64, 
-                                             Float64, Float64, Float64, Matrix{Float64}, Matrix{Float64}, 
-                                             Matrix{Float64}, Matrix{Float64}, Matrix{Float64}, Matrix{Float64}, 
-                                             Matrix{Float64}, Int64, Matrix{Float64}, Int64},
+                            Matrix{Float64},Matrix{Float64}, Matrix{Float64}, Int64, 
+                            Float64, Float64, Float64, Matrix{Float64}, Matrix{Float64}, 
+                            Matrix{Float64}, Matrix{Float64}, Matrix{Float64}, Matrix{Float64}, 
+                            Matrix{Float64}, Int64, Matrix{Float64}, Int64},
+
         args_step::Tuple{Int64, Int64, Int64, Int64, Int64, Matrix{Float64}, Int64, 
                             Matrix{Float64},Vector{Float64}, Vector{Float64}, Int64, Float64, 
                             Float64, Float64, Vector{Float64},Vector{Float64}, Vector{Float64}, 
                             Vector{Float64}, Vector{Float64}, Vector{Float64},Vector{Float64}, Matrix{Float64}, Int64}
-        )::Nothing
+    )::Nothing
         expert_model = make_expert_model(args_expert)
         step_model = make_step_model(args_step)
         reset_model = make_reset_model(args_step)
@@ -59,8 +60,8 @@ end
 function make_expert_model(args_expert)::JuMP.Model
 
     NT, N_Branch, N_TL, N_NL, N_Bus, pIn, N_DG, DG_Mask, R_Branch, X_Branch, Big_M_V, V0,
-        V_min, V_max, Pd, Qd, S_Branch, P_DG_min, P_DG_max, Q_DG_min, Q_DG_max, BigM_SC, BSDG_Mask,
-        Big_M_FF = args_expert
+    V_min, V_max, Pd, Qd, S_Branch, P_DG_min, P_DG_max, Q_DG_min, Q_DG_max, BigM_SC, BSDG_Mask,
+    Big_M_FF = args_expert
     
     expert_model = Model()
 
@@ -166,12 +167,11 @@ function make_expert_model(args_expert)::JuMP.Model
     return expert_model  
 end
 
-
 function make_step_model(args_step)::JuMP.Model
 
     NT, N_Branch, N_TL, N_NL, N_Bus, pIn, N_DG, DG_Mask, R_Branch, X_Branch, Big_M_V, V0,
-        V_min, V_max, Pd, Qd, S_Branch, P_DG_min, P_DG_max, Q_DG_min,
-        Q_DG_max, BSDG_Mask, Big_M_FF = args_step
+    V_min, V_max, Pd, Qd, S_Branch, P_DG_min, P_DG_max, Q_DG_min,
+    Q_DG_max, BSDG_Mask, Big_M_FF = args_step
 
     step_model = Model()
 
@@ -266,12 +266,11 @@ function make_step_model(args_step)::JuMP.Model
     return step_model
 end
 
-
 function make_reset_model(args_step)::JuMP.Model
 
     NT, N_Branch, N_TL, N_NL, N_Bus, pIn, N_DG, DG_Mask, R_Branch, X_Branch, Big_M_V, V0,
-        V_min, V_max, Pd, Qd, S_Branch, P_DG_min, P_DG_max, Q_DG_min,
-        Q_DG_max, BSDG_Mask, Big_M_FF = args_step
+    V_min, V_max, Pd, Qd, S_Branch, P_DG_min, P_DG_max, Q_DG_min,
+    Q_DG_max, BSDG_Mask, Big_M_FF = args_step
 
     reset_model = Model()
 
@@ -362,6 +361,7 @@ end
 """------------------------------ End of Definitions ----------------------------------"""
 
 
+
 """------------------------------ Utility Functions ----------------------------------
 Servel utility functions are defined for managing the core in an external way:
 
@@ -386,7 +386,7 @@ function init_opf_core(;
     MIP_gap_step_model::Float64=1e-4,
     MIP_gap_reset_model::Float64=1e-4,
     display::Bool=true
-    )::Nothing
+)::Nothing
     """
     We can not use jl.OPF_Core() thourgh JuliaPy interface. We use this function to initialize the core.
     
@@ -406,25 +406,25 @@ function init_opf_core(;
 
     if solver == "CPLEX"
         #NOTE: You can add more attributes
-        expert_model_optimizer = optimizer_with_attributes(CPLEX.Optimizer,
-                                                            "CPXPARAM_ScreenOutput" => display,
-                                                            "CPX_PARAM_EPGAP" => MIP_gap_expert_model)
-        step_model_optimizer = optimizer_with_attributes(CPLEX.Optimizer,
-                                                            "CPXPARAM_ScreenOutput" => display,
-                                                            "CPX_PARAM_EPGAP" => MIP_gap_step_model)
-        reset_model_optimizer = optimizer_with_attributes(CPLEX.Optimizer,
-                                                            "CPXPARAM_ScreenOutput" => display,
-                                                            "CPX_PARAM_EPGAP" => MIP_gap_reset_model)
+        expert_model_optimizer = optimizer_with_attributes(
+            CPLEX.Optimizer, "CPXPARAM_ScreenOutput" => display, "CPX_PARAM_EPGAP" => MIP_gap_expert_model
+        )
+        step_model_optimizer = optimizer_with_attributes(
+            CPLEX.Optimizer, "CPXPARAM_ScreenOutput" => display, "CPX_PARAM_EPGAP" => MIP_gap_step_model
+        )
+        reset_model_optimizer = optimizer_with_attributes(
+            CPLEX.Optimizer, "CPXPARAM_ScreenOutput" => display, "CPX_PARAM_EPGAP" => MIP_gap_reset_model
+        )
     elseif solver == "Gurobi"
-        expert_model_optimizer = optimizer_with_attributes(Gurobi.Optimizer,
-                                                            "output_flag" => display,
-                                                            "MIPGap" => MIP_gap_expert_model)
-        step_model_optimizer = optimizer_with_attributes(Gurobi.Optimizer,
-                                                            "output_flag" => display,
-                                                            "MIPGap" => MIP_gap_step_model)
-        reset_model_optimizer = optimizer_with_attributes(Gurobi.Optimizer,
-                                                            "output_flag" => display,
-                                                            "MIPGap" => MIP_gap_reset_model)
+        expert_model_optimizer = optimizer_with_attributes(
+            Gurobi.Optimizer, "output_flag" => display, "MIPGap" => MIP_gap_expert_model
+        )
+        step_model_optimizer = optimizer_with_attributes(
+            Gurobi.Optimizer, "output_flag" => display, "MIPGap" => MIP_gap_step_model
+        )
+        reset_model_optimizer = optimizer_with_attributes(
+            Gurobi.Optimizer, "output_flag" => display, "MIPGap" => MIP_gap_reset_model
+        )
     else
         #NOTE: Add more solvers if needed
         error("solver not supported")
@@ -435,7 +435,6 @@ function init_opf_core(;
     set_optimizer(core.reset_model, reset_model_optimizer)
 
 end
-
 
 function set_dmg(a_input::Matrix{Float64})::Nothing
     """
@@ -460,7 +459,7 @@ function set_ExpertModel(;
     X_rec0_input::Vector{Int8},
     X_line0_input::Vector{Int8},
     vvo::Bool=true
-    )::Nothing
+)::Nothing
     """
     Set the initial state for expert model. The inputs are partly from the results of rest model.
     """
@@ -491,7 +490,7 @@ function set_StepModel(;
     X_tieline_input::Vector{Int8},
     Q_svc_input::Union{Vector{Float64},Nothing} =nothing,
     vvo::Bool=true
-    )::Nothing
+)::Nothing
     """
     Set the initial state for step model. The inputs are partly from the results of rest model or the pervious step model.
     """
@@ -520,11 +519,10 @@ function set_StepModel(;
     
 end
 
-
 function set_ResetModel(; 
     X_tieline_input::Vector{Float64}, 
     Q_svc_input::Vector{Float64}
-    )::Nothing
+)::Nothing
     """
     Set the parameters for reset model.
     """
@@ -540,7 +538,6 @@ function set_ResetModel(;
     end
     
 end
-
 
 function solve_ExpertModel()::Tuple{Bool, Union{Nothing, Matrix{Float64}}, Union{Nothing, Matrix{Float64}}, Union{Nothing, Matrix{Float64}}, 
                                     Union{Nothing, Matrix{Float64}}, Union{Nothing, Matrix{Float64}}, Union{Nothing, Matrix{Float64}}}
@@ -566,7 +563,6 @@ function solve_ExpertModel()::Tuple{Bool, Union{Nothing, Matrix{Float64}}, Union
     end
 
 end
-
 
 function solve_StepModel()::Tuple{Bool, Union{Nothing, Vector{Float64}}, Union{Nothing, Vector{Float64}}, 
                                     Union{Nothing, Vector{Float64}}, Union{Nothing, Vector{Float64}}, 
@@ -596,7 +592,6 @@ function solve_StepModel()::Tuple{Bool, Union{Nothing, Vector{Float64}}, Union{N
         return solved_flag, nothing, nothing, nothing, nothing, nothing, nothing, nothing 
     end
 end
-
 
 function solve_ResetModel()::Tuple{Vector{Float64}, Vector{Float64}, Vector{Float64}, 
                                     Vector{Float64}, Vector{Float64}, Float64}

@@ -1,17 +1,24 @@
-import logging # 日志记录用
+"""
+This utility file is modified from the original file from the repository https://github.com/whoiszyc/IntelliHealer.
+"""
 import sys
 import os
-import time
-from datetime import datetime
+import logging 
 import csv
+from datetime import datetime
+from typing import Optional, Tuple, Union 
+import numpy as np
 
 class logger:
-    def __init__(self,log_output_path=None, level=logging.DEBUG, verbose=0):
-        # 就是一个日志记录器.可以放到utils里
+    def __init__(
+        self,
+        log_output_path:Optional[str] = None, 
+        level:int = logging.DEBUG, 
+        verbose:int = 0
+    ) -> None:
         """
         Method to return a custom logger with the given name and level
         """
-        # 确定log日志文件名
         now = datetime.now()
         dt_string = now.strftime("__%Y_%m_%d_%H_%M")
         self.dt_string = dt_string
@@ -34,7 +41,7 @@ class logger:
             self.expert_recovery_rate_log_path = log_output_path + "/" + "expert_recovery_rate" + dt_string + ".csv"
             self.success_rate_log_path = log_output_path + "/" + "success_rate" + dt_string + ".csv"
         
-        # 创建日志loger
+        # create the logger
         self.event_logger = logging.getLogger(event_log_output_path)
         self.event_logger.setLevel(level)
         format_string = ("%(asctime)s - %(levelname)s - %(funcName)s (%(lineno)d):  %(message)s")
@@ -52,14 +59,23 @@ class logger:
             console_handler.setFormatter(log_format)
             self.event_logger.addHandler(console_handler)
             
-    def save_to_file(self, disturb, agent_recovery_rate, expert_recovery_rate, success_rate):
-        # 将disturb, agent_recovery_rate, expert_recovery_rate写入csv文件   
+    def save_to_file(
+        self, 
+        disturb:Union[list, np.ndarray],
+        agent_recovery_rate:Union[list, np.ndarray],
+        expert_recovery_rate:Union[list, np.ndarray],
+        success_rate:Union[list, np.ndarray]
+    ) -> None:
         self._save_csv(self.disturb_log_path, disturb)
         self._save_csv(self.agent_recovery_rate_log_path, agent_recovery_rate)
         self._save_csv(self.expert_recovery_rate_log_path, expert_recovery_rate)
         self._save_csv(self.success_rate_log_path, success_rate)
     
-    def _save_csv(self, path, score):
+    def _save_csv(
+        self, 
+        path:str, 
+        score:Union[list, np.ndarray]
+    ) -> None:
         if not os.path.exists(path):
             with open(path, "w"):
                 pass
