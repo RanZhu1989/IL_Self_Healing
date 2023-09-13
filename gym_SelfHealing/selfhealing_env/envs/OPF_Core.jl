@@ -46,7 +46,7 @@ struct OPF_Core
                             Matrix{Float64},Vector{Float64}, Vector{Float64}, Int64, Float64, 
                             Float64, Float64, Vector{Float64},Vector{Float64}, Vector{Float64}, 
                             Vector{Float64}, Vector{Float64}, Vector{Float64},Vector{Float64}, Matrix{Float64}, Int64}
-    )::Nothing
+    )
         expert_model = make_expert_model(args_expert)
         step_model = make_step_model(args_step)
         reset_model = make_reset_model(args_step)
@@ -386,7 +386,7 @@ function init_opf_core(;
     MIP_gap_step_model::Float64=1e-4,
     MIP_gap_reset_model::Float64=1e-4,
     display::Bool=true
-)::Nothing
+)
     """
     We can not use jl.OPF_Core() thourgh JuliaPy interface. We use this function to initialize the core.
     
@@ -436,7 +436,7 @@ function init_opf_core(;
 
 end
 
-function set_dmg(a_input::Matrix{Float64})::Nothing
+function set_dmg(a_input::Matrix{Float64})
     """
     Set the damaged lines for ALL three models. 
     In each episode, this function should be called ONLY ONE time when the disturbances are determined.
@@ -459,7 +459,7 @@ function set_ExpertModel(;
     X_rec0_input::Vector{Int8},
     X_line0_input::Vector{Int8},
     vvo::Bool=true
-)::Nothing
+)
     """
     Set the initial state for expert model. The inputs are partly from the results of rest model.
     """
@@ -490,7 +490,7 @@ function set_StepModel(;
     X_tieline_input::Vector{Int8},
     Q_svc_input::Union{Vector{Float64},Nothing} =nothing,
     vvo::Bool=true
-)::Nothing
+)
     """
     Set the initial state for step model. The inputs are partly from the results of rest model or the pervious step model.
     """
@@ -522,7 +522,7 @@ end
 function set_ResetModel(; 
     X_tieline_input::Vector{Float64}, 
     Q_svc_input::Vector{Float64}
-)::Nothing
+)
     """
     Set the parameters for reset model.
     """
