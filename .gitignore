@@ -8,3 +8,4 @@ build
 results/
 *.log
 .VSCodeCounter/
+plot/
