@@ -229,7 +229,7 @@ class SelfHealing_Env(gym.Env):
             if external_rng is not None:
                 num_disturbance = external_rng.randint(self.min_disturbance, self.max_disturbance)
             else:
-                if self.min_disturbance==self.min_disturbance:
+                if self.min_disturbance==self.max_disturbance:
                     num_disturbance = self.min_disturbance
                 else:
                     num_disturbance = self.np_random.integers(low=self.min_disturbance, high=self.max_disturbance) # Generate k

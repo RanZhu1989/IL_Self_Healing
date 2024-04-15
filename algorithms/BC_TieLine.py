@@ -124,7 +124,7 @@ class TrainManager():
         self.action_dim = env.action_space.n
         
         self.seed = seed
-        self.test_rng = random.Random(self.seed) # Seed for testing
+        self.test_rng = random.Random(self.seed+1) # Seed for testing
         _,_ = env.reset(seed=self.seed) # Seed for training
         random.seed(self.seed)
         torch.manual_seed(self.seed)
@@ -237,7 +237,7 @@ class TrainManager():
             # performance = sum[load rate] - sum[load rate at s0] * total time steps
             performance = np.sum(agent_load_rate).item() - load_rate_s0*len(agent_load_rate)
             if abs(goal) > 1e-6:
-                success_rate = performance/goal
+                success_rate = min(performance/goal,1)
                 self.logger.event_logger.info("performance: {}; goal: {}".format(performance, goal)) 
             else:
                 success_rate = 1 # if goal is too small, we consider it as success
@@ -262,7 +262,7 @@ class TrainManager():
 
 if __name__ == "__main__":
     current_path = os.getcwd()
-    log_output_path = current_path + "/results/BC_TieLine/n_1/"
+    log_output_path = current_path + "/results/BC_TieLine/n_2/"
     tensorboard_path = log_output_path + "tensorboard/"
 
     env = gym.make(
@@ -271,8 +271,8 @@ if __name__ == "__main__":
         solver="cplex",
         data_file="Case_33BW_Data.xlsx",
         solver_display=False,
-        min_disturbance=1,
-        max_disturbance=1,
+        min_disturbance=2,
+        max_disturbance=2,
         vvo=False,
         Sb=100,
         V0=1.05,
@@ -283,8 +283,8 @@ if __name__ == "__main__":
     manager = TrainManager(
         env=env,
         log_output_path = log_output_path,
-        episode_num=200,
-        train_iterations=100,
+        episode_num=2000,
+        train_iterations=10,
         lr=1e-3,
         test_iterations=5, 
         device=torch.device("cpu"),
