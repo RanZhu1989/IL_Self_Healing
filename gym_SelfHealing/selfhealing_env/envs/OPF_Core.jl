@@ -540,7 +540,8 @@ function set_ResetModel(;
 end
 
 function solve_ExpertModel()::Tuple{Bool, Union{Nothing, Matrix{Float64}}, Union{Nothing, Matrix{Float64}}, Union{Nothing, Matrix{Float64}}, 
-                                    Union{Nothing, Matrix{Float64}}, Union{Nothing, Matrix{Float64}}, Union{Nothing, Matrix{Float64}}}
+                                    Union{Nothing, Matrix{Float64}}, Union{Nothing, Matrix{Float64}}, Union{Nothing, Matrix{Float64}},
+                                    Union{Nothing, Matrix{Float64}}, Union{Nothing, Matrix{Float64}}}
     """
     Solve the expert model and return the results. The model can be infeasible.
     """
@@ -555,11 +556,13 @@ function solve_ExpertModel()::Tuple{Bool, Union{Nothing, Matrix{Float64}}, Union
         x_load = value.(core.expert_model[:X_rec])
         Pg = value.(core.expert_model[:P_dg])
         Qg = value.(core.expert_model[:Q_dg])
+        PF = value.(core.expert_model[:PF])
+        QF = value.(core.expert_model[:QF])
         Prec = sum(value.(core.expert_model[:Pd_rec]),dims=1)
-
-        return solved_flag, b, x_tieline, x_load, Pg, Qg, Prec
+        
+        return solved_flag, b, x_tieline, x_load, Pg, Qg, PF, QF, Prec
     else 
-        return solved_flag, nothing, nothing, nothing, nothing, nothing, nothing
+        return solved_flag, nothing, nothing, nothing, nothing, nothing, nothing, nothing, nothing, nothing
     end
 
 end
