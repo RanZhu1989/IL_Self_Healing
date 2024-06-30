@@ -30,7 +30,7 @@ class BC_Agent():
         self.device = device
         
     def predict(self, obs:np.ndarray)->torch.tensor:
-        
+        # categorical crossentropy： MLE loss
         obs = torch.tensor(obs, dtype = torch.float32).to(self.device)
         dist = self.policy_network(obs)
         # action_probs = torch.distributions.Categorical(dist)

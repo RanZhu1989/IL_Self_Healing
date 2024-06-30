@@ -461,7 +461,8 @@ class OPF_Core:
         )
         
     def solve_ExpertModel(self) -> Tuple[bool, Optional[np.ndarray], Optional[np.ndarray], Optional[np.ndarray], 
-                                         Optional[np.ndarray], Optional[np.ndarray], Optional[np.ndarray]]:
+                                         Optional[np.ndarray], Optional[np.ndarray], Optional[np.ndarray],
+                                            Optional[np.ndarray], Optional[np.ndarray]]:
         """
         Same as solve_ExpertModel in OPF_Core.jl 
         """
@@ -472,6 +473,8 @@ class OPF_Core:
             b = _getX_MvarByName(model=self.expert_model, mvar_name="b", shape=[self.N_Branch,self.NT])
             x_tieline = _getX_MvarByName(model=self.expert_model, mvar_name="X_tieline", shape=[self.N_TL,self.NT])
             x_load = _getX_MvarByName(model=self.expert_model, mvar_name="X_rec", shape=[self.N_Bus,self.NT])
+            Pg = _getX_MvarByName(model=self.expert_model, mvar_name="P_dg", shape=[self.N_DG,self.NT])
+            Qg = _getX_MvarByName(model=self.expert_model, mvar_name="Q_dg", shape=[self.N_DG,self.NT])
             PF = _getX_MvarByName(model=self.expert_model, mvar_name="PF", shape=[self.N_Branch,self.NT])
             QF = _getX_MvarByName(model=self.expert_model, mvar_name="QF", shape=[self.N_Branch,self.NT])
             Prec = np.sum(
@@ -479,9 +482,9 @@ class OPF_Core:
                 axis=0
             )
         
-            return solved_flag, b, x_tieline, x_load, PF, QF, Prec
+            return solved_flag, b, x_tieline, x_load, Pg, Qg, PF, QF, Prec
         else:
-            return solved_flag, None, None, None, None, None, None
+            return solved_flag, None, None, None, None, None, None, None, None
     
     def solve_StepModel(self) -> Tuple[bool, Optional[np.ndarray], Optional[np.ndarray], 
                                        Optional[np.ndarray], Optional[np.ndarray], Optional[np.ndarray],

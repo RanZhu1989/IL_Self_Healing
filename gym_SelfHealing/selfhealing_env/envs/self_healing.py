@@ -347,16 +347,18 @@ class SelfHealing_Env(gym.Env):
                    | expert_x_branch: branch status (AFTER the action)
                    | expert_branch_obs: branch OBSERVATION (BEFORE the action)
                    | expert_x_load: load pick up ACTIONS
+                   | expert_PF: branch power flow
+                   | expert_QF: branch reactive power flow
                    | expert_Pg: generator active power output 
                    | expert_Qg: generator reactive power output
                    | load_value_expert: total load recovered
             """
             if self.opt_framework == "JuMP":
                 solved_flag, expert_b, expert_x_tieline, expert_x_load, \
-                    expert_Pg, expert_Qg, load_value_expert = jl.solve_ExpertModel()
+                    expert_Pg, expert_Qg, expert_PF, expert_QF, load_value_expert = jl.solve_ExpertModel()
             elif self.opt_framework == "Gurobipy":
                 solved_flag, expert_b, expert_x_tieline, expert_x_load, \
-                    expert_Pg, expert_Qg, load_value_expert = self.core.solve_ExpertModel()
+                    expert_Pg, expert_Qg, expert_PF, expert_QF, load_value_expert = self.core.solve_ExpertModel()
             else:
                 #NOTE Add other optimization frameworks here.
                 raise Exception("Optimization framework not supported!")
@@ -368,6 +370,8 @@ class SelfHealing_Env(gym.Env):
                 expert_x_branch = np.concatenate((self.a,expert_x_tieline)).astype(np.int8)
                 expert_branch_obs = np.concatenate((branch_obs0.reshape(-1, 1),expert_x_branch[:,:-1]), axis=1).astype(np.int8)
                 expert_x_load = np.round(expert_x_load).astype(np.int8)
+                expert_PF = expert_PF
+                expert_QF = expert_QF
                 expert_P_sub = expert_Pg[0,:]
                 expert_Q_sub = expert_Qg[0,:]
                 expert_Q_svc = expert_Qg[1:,:]
@@ -393,6 +397,8 @@ class SelfHealing_Env(gym.Env):
                     "P_sub": expert_P_sub,                      # np.ndarray
                     "Q_sub": expert_Q_sub,                      # np.ndarray
                     "Q_svc": expert_Q_svc,                      # np.ndarray
+                    "PF": expert_PF,                            # np.ndarray
+                    "QF": expert_QF,                            # np.ndarray
                     "Load_Rate": expert_load_rate               # np.ndarray    
                 }
                 
