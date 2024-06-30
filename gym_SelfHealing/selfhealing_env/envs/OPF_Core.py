@@ -418,7 +418,7 @@ class OPF_Core:
         """
         Same as set_StepModel in OPF_Core.jl
         """
-        if vvo & (Q_svc_input==None):
+        if vvo and Q_svc_input is None:
             raise ValueError("Please provide a value for Q_svc_input when vvo mode is set to true.")
         
         _fixMvar(

@@ -48,10 +48,13 @@ class BC_Agent():
 
         return picked_action
     
-    def predict_continuous(self, obs:np.ndarray)->torch.tensor:
-        # 输入是潮流状态（线路PQ），输出是SVC的功率    
+    def predict_continuous(self, 
+                           obs:np.ndarray,
+                           upper_idx:int
+                           )->torch.tensor:
+  
         obs = torch.tensor(obs, dtype = torch.float32).to(self.device)
-        out = self.continuous_policy_networks(obs)
+        out = self.continuous_policy_networks[upper_idx](obs)
         action = out * self.continuous_action_scale + self.continuous_action_bias
         
         return action
@@ -170,10 +173,11 @@ class TrainManager():
         self.discrete_obs_dim = gym.spaces.utils.flatdim(env.observation_space["X_branch"])
         self.discrete_action_dim = gym.spaces.utils.flatdim(env.action_space["Tieline"])
         self.continuous_obs_dim = gym.spaces.utils.flatdim(env.observation_space["PF"]) + gym.spaces.utils.flatdim(env.observation_space["QF"])
-        self.continuous_action_dim = gym.spaces.utils.flatdim(env.action_space["SVC"])
+        self.continuous_action_dim = gym.spaces.utils.flatdim(env.action_space["Varcon"])
+        self.device = device
         
         action_upper_bound = self.env.action_space["Varcon"].high
-        action_lower_bound = self.env.action_space["Varcon"].lowaction_scale
+        action_lower_bound = self.env.action_space["Varcon"].low
         action_bias = (action_upper_bound + action_lower_bound) / 2.0
         action_bias = torch.tensor(action_bias,dtype=torch.float32).to(self.device)
         action_scale = (action_upper_bound - action_lower_bound) / 2.0
@@ -188,7 +192,7 @@ class TrainManager():
         torch.cuda.manual_seed_all(seed)
         torch.backends.cudnn.deterministic = True
         
-        self.device = device
+        
         discrete_policy_network = Discrete_Policy_Network(self.discrete_obs_dim, self.discrete_action_dim).to(self.device)
         discrete_optimizer = torch.optim.Adam(discrete_policy_network.parameters(), lr=lr)
         continuous_policy_networks = [Continuous_Policy_Network(self.continuous_obs_dim, 
@@ -210,7 +214,7 @@ class TrainManager():
             discrete_policy_network=discrete_policy_network,
             continuous_policy_networks=continuous_policy_networks,
             discrete_optimizer=discrete_optimizer,
-            continuous_optimizer=continuous_optimizers,
+            continuous_optimizers=continuous_optimizers,
             device=self.device
         )
         
@@ -298,11 +302,11 @@ class TrainManager():
                 s_top_0 = np.reshape(s0["X_branch"], (-1, self.env.system_data.N_Branch))
                 a_tieline = self.agent.predict_discrete(s_top_0)
                 a_tieline = int(a_tieline.item())
-                s_pqf_0 = np.vstack((s0["PF"], s0["QF"]))
-                a_svc = self.agent.predict_continuous[a_tieline](s_pqf_0)
+                s_pqf_0 = np.concatenate((s0["PF"], s0["QF"]), axis=0)
+                a_svc = self.agent.predict_continuous(s_pqf_0, a_tieline)
                 a_svc = a_svc.to("cpu").detach().numpy()
                 self.logger.event_logger.info("Given state S[{}] = {}".format(step, s_top_0[0]))
-                self.logger.event_logger.info("Agent action at S[{}] is Ad[{}] = {}, Ac[{} = {}]".format(step, step+1, a_tieline, step+1, a_svc))
+                self.logger.event_logger.info("Agent action at S[{}] is Ad[{}] = {}, Ac[{}] = {}".format(step, step+1, a_tieline, step+1, a_svc))
                 a = {"Tieline":a_tieline, "Varcon":a_svc}
                 s, reward, _, _, agent_info = self.env.step(a)
                 load_rate = agent_info["Recovered_Load_Rate"]
@@ -338,3 +342,36 @@ class TrainManager():
             success_rate=np.array(saved_success_rate)
         )
         pass
+
+if __name__ == "__main__":
+    current_path = os.getcwd()
+    log_output_path = current_path + "/results/BC_Varcon/n_2/"
+    tensorboard_path = log_output_path + "tensorboard/"
+
+    env = gym.make(
+        "SelfHealing-v0",
+        opt_framework="Gurobipy",
+        solver="gurobi",
+        data_file="Case_33BW_Data.xlsx",
+        solver_display=False,
+        min_disturbance=2,
+        max_disturbance=2,
+        vvo=True,
+        Sb=100,
+        V0=1.05,
+        V_min=0.95,
+        V_max=1.05
+    )
+    
+    manager = TrainManager(
+        env=env,
+        log_output_path = log_output_path,
+        episode_num=2000,
+        train_iterations=10,
+        lr=1e-3,
+        test_iterations=5, 
+        device=torch.device("cpu"),
+        seed=0
+    )
+    
+    manager.train()
