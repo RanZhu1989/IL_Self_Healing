@@ -11,10 +11,15 @@ import torch
 import torch.nn.functional as F
 
 import selfhealing_env
-from utils import logger
+## --In case of import error when you have to use python-jl to run the code, please use the following import statement--
+import sys
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+# --------------------------------------------------------------------------------------------------------------
+from utils import logger, check_cuda, get_time, find_1Dtensor_value_indices
+from configs import args
 
-class BC_Agent():
-    """Behavioral Cloning Agent"""
+class DAgger_Agent():
+    # Dataset Aggregation (DAgger) Agent
     def __init__(self,
         discrete_input_dim:int,
         discrete_output_dim:int,
@@ -128,18 +133,25 @@ class ReplayBuffer():
     def append(self,exp_data:tuple) -> None:
         self.buffer.append(exp_data)
         
-    def sample(self,batch_size:int) -> Tuple[torch.tensor,torch.tensor,torch.tensor,torch.tensor]:
-        batch_size = min(batch_size, len(self.buffer)) # in case the buffer is not enough        
+    def sample(self,
+               batch_size:int,
+               shuffle:bool = True
+               ) -> Tuple[torch.tensor,torch.tensor,torch.tensor,torch.tensor]:
+        batch_size = min(batch_size, len(self.buffer)) # in case the buffer is not enough
+        if shuffle:
+            self.buffer = random.sample(self.buffer,len(self.buffer))     
         mini_batch = random.sample(self.buffer,batch_size)
         Xd_batch, Yd_batch, Xc_batch, Yc_batch = zip(*mini_batch) # discrete_obs, discrete_action, continuous_obs, continuous_action
         Xd_batch = torch.tensor(np.array(Xd_batch),dtype=torch.float32,device=self.device)
         Yd_batch = torch.tensor(np.array(Yd_batch),dtype=torch.int64,device=self.device)
         Xc_batch = torch.tensor(np.array(Xc_batch),dtype=torch.float32,device=self.device)
         Yc_batch = torch.tensor(np.array(Yc_batch),dtype=torch.float32,device=self.device)
-          
+        
         return Xd_batch, Yd_batch, Xc_batch, Yc_batch
     
-    def fetch_all(self) -> Tuple[torch.tensor,torch.tensor,torch.tensor,torch.tensor]:
+    def fetch_all(self,shuffle:bool = True) -> Tuple[torch.tensor,torch.tensor,torch.tensor,torch.tensor]:
+        if shuffle:
+            self.buffer = random.sample(self.buffer,len(self.buffer))
         Xd_batch, Yd_batch, Xc_batch, Yc_batch = zip(*self.buffer)
         Xd_batch = torch.tensor(np.array(Xd_batch),dtype=torch.float32,device=self.device)
         Yd_batch = torch.tensor(np.array(Yd_batch),dtype=torch.int64,device=self.device)
@@ -204,7 +216,7 @@ class TrainManager():
         self.log_output_path = log_output_path
         self.test_iterations = test_iterations
         
-        self.agent = BC_Agent(
+        self.agent = DAgger_Agent(
             discrete_input_dim=self.discrete_obs_dim,
             discrete_output_dim=self.discrete_action_dim,
             continuous_input_dim=self.continuous_obs_dim,
@@ -224,18 +236,16 @@ class TrainManager():
         pass
 
     def train(self) -> None:
-            tic = time.perf_counter()
-            with tqdm(total=self.episode_num, desc='Training') as pbar:
-                for idx_episode in range(self.episode_num):
-                    self.logger.event_logger.info(
-                        f"=============== Episode {idx_episode+1:d} of {self.episode_num:d} ================="
-                    )
-                    self.train_episode()
-                    self.test()
-                    toc = time.perf_counter()
-                    pbar.set_postfix({"Training time": f"{toc - tic:0.2f} seconds"})
-                    pbar.update(1)
-                    pass
+        with tqdm(total=self.episode_num, desc='Training') as pbar:
+            for idx_episode in range(self.episode_num):
+                self.logger.event_logger.info(
+                    f"=============== Episode {idx_episode+1:d} of {self.episode_num:d} ================="
+                )
+                self.train_episode()
+                test_avg_rate = self.test()
+                pbar.set_postfix({"Test Success Rate": test_avg_rate})
+                pbar.update(1)
+                pass
     
     def train_episode(self) -> None:
         options = {
@@ -263,10 +273,11 @@ class TrainManager():
             # Discrete policy learning
             self.agent.train_discrete(Xd_batch, Yd_batch)
             # Continuous policy learning
+            indices = find_1Dtensor_value_indices(Yd_batch, self.discrete_action_dim)
             for idx in range(self.discrete_action_dim):
-                self.agent.train_continuous(Xc_batch, Yc_batch, idx)
+                self.agent.train_continuous(Xc_batch[indices[idx],:], Yc_batch[indices[idx],:], idx)
     
-    def test(self) -> None:
+    def test(self) -> float:
         options = {
             "Specific_Disturbance":None,
             "Expert_Policy_Required":True,
@@ -341,37 +352,50 @@ class TrainManager():
             expert_recovery_rate=np.array(saved_expert_load_rate), 
             success_rate=np.array(saved_success_rate)
         )
-        pass
+        
+        return np.mean(saved_success_rate)
+
 
 if __name__ == "__main__":
+    
+    env = gym.make(
+        id=args.env_id,
+        opt_framework=args.opt_framework,
+        solver=args.solver,
+        data_file=args.data_file,
+        solver_display=args.solver_display,
+        min_disturbance=args.min_disturbance,
+        max_disturbance=args.max_disturbance,
+        vvo=True,
+        Sb=args.Sb,
+        V0=args.V0,
+        V_min=args.V_min,
+        V_max=args.V_max
+    )
+    
     current_path = os.getcwd()
-    log_output_path = current_path + "/results/BC_Varcon/n_2/"
+    task_name = 'DAgger_Hybrid'
+    log_output_path = current_path + "/" + args.result_folder_name + "/" + task_name + \
+                    ("_n_" + str(args.min_disturbance) + "to" + str(args.max_disturbance)
+                        + "_" + get_time() + "/" )
+    
     tensorboard_path = log_output_path + "tensorboard/"
 
-    env = gym.make(
-        "SelfHealing-v0",
-        opt_framework="Gurobipy",
-        solver="gurobi",
-        data_file="Case_33BW_Data.xlsx",
-        solver_display=False,
-        min_disturbance=2,
-        max_disturbance=2,
-        vvo=True,
-        Sb=100,
-        V0=1.05,
-        V_min=0.95,
-        V_max=1.05
-    )
+    if args.forced_cpu:
+        device = torch.device("cpu")
+    else:
+        device = check_cuda()
+
     
     manager = TrainManager(
         env=env,
         log_output_path = log_output_path,
-        episode_num=2000,
-        train_iterations=10,
-        lr=1e-3,
-        test_iterations=5, 
-        device=torch.device("cpu"),
-        seed=0
+        episode_num=args.train_epochs,
+        train_iterations=args.DAgger_update_iters,
+        lr=args.IL_lr,
+        test_iterations=args.test_iterations,
+        device=device,
+        seed=args.seed
     )
     
     manager.train()

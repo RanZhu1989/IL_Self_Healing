@@ -13,11 +13,17 @@ from matplotlib import pyplot as plt
 import pandas as pd
 
 import selfhealing_env
+## --In case of import error when you have to use python-jl to run the code, please use the following import statement--
+import sys
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+# --------------------------------------------------------------------------------------------------------------
 from utils import logger
 
 # PPO Agent
 class PPO_Clip_Agent():
-    """ PPO agent with clipping. """
+    """ 
+    We use the PPO-Clip algorithm to act as the Policy (generator) in the GAIL framework.
+    """
     def __init__(
         self,
         episode_recorder:object,
@@ -173,7 +179,7 @@ class Episode_Recorder():
         self.trajectory["reward"] = torch.tensor(reward, dtype=torch.float32).to(self.device)
 
 
-# 专家经验收集
+# Expert experience collector
 class ReplayBuffer():
     """Expert experience collector"""
     def __init__(
@@ -196,12 +202,17 @@ class ReplayBuffer():
           
         return obs_batch, action_batch
     
-    def fetch_all(self) -> Tuple[torch.tensor,torch.tensor]:
+    def fetch_all(self,
+                  shuffle:bool = True
+                  ) -> Tuple[torch.tensor,torch.tensor]:
+        if shuffle:
+            random.shuffle(self.buffer)
         obs_batch, action_batch = zip(*self.buffer)
         obs_batch = torch.tensor(np.array(obs_batch),dtype=torch.float32,device=self.device)
         action_batch = torch.tensor(np.array(action_batch),dtype=torch.int64,device=self.device) 
           
         return obs_batch, action_batch
+    
     
     def release(self) -> None:
         self.buffer.clear()
@@ -210,39 +221,42 @@ class ReplayBuffer():
         return len(self.buffer)
 
 
-# GAIL模仿学习智能体
+# GAIL algorithm
 class GAIL():
     def __init__(
         self,
         action_dim:int,
-        d_network,
-        d_optimizer
+        d_network:torch.nn,
+        d_optimizer:torch.optim,
+        train_iters:int
     ) -> None:
         self.d_network = d_network
         self.d_optimizer = d_optimizer
         self.action_dim = action_dim
+        self.train_iters = train_iters
         
-    def train_d(self, exp_obs, exp_action, agent_obs, agent_action):
-        # 学习需要：1. 专家经验 2. PPO交互采集的轨迹
-        # 用专家经验和PPO交互轨迹来训练判别器
-        # 把奖励设置为log(D(s,a)), 输入到PPO交互采集的轨迹中形成PPO训练数据
-        # 调用PPO算法训练PPO
-        # exp_obs, exp_action = self.buffer.fetch_all()
+    def train_d(self, 
+                exp_obs:torch.tensor,
+                exp_action:torch.tensor,
+                agent_obs:torch.tensor,
+                agent_action:torch.tensor
+                ):
+
         exp_action = F.one_hot(exp_action.to(torch.int64), num_classes=self.action_dim).to(torch.float32).squeeze()
-        # print(exp_action)
         agent_action = F.one_hot(agent_action.to(torch.int64), num_classes=self.action_dim).to(torch.float32).squeeze()
-        # print(agent_action)
-        exp_prob = self.d_network(exp_obs, exp_action)
-        agent_prob = self.d_network(agent_obs, agent_action)
-        loss = torch.nn.BCELoss()(
-            agent_prob, torch.ones_like(agent_prob)) + torch.nn.BCELoss()(
-                exp_prob, torch.zeros_like(exp_prob))
-            
-        self.d_optimizer.zero_grad()
-        loss.backward()
-        self.d_optimizer.step()
+        for _ in range(self.train_iters):
+            exp_prob = self.d_network(exp_obs, exp_action)
+            agent_prob = self.d_network(agent_obs, agent_action)
+            loss = torch.nn.BCELoss()(
+                agent_prob, torch.ones_like(agent_prob)) + torch.nn.BCELoss()(
+                    exp_prob, torch.zeros_like(exp_prob))
+                
+            self.d_optimizer.zero_grad()
+            loss.backward()
+            self.d_optimizer.step()
+            pass
         
-        gail_reward = -torch.log(agent_prob).detach().cpu().numpy()
+        gail_reward = -torch.log(self.d_network(agent_obs, agent_action)).detach().cpu().numpy()
         
         return gail_reward
         
@@ -265,7 +279,8 @@ class TrainManager():
         env:gym.Env,
         log_output_path:Optional[str]=None,
         episode_num:int = 1000,
-        train_iterations = 1,
+        expert_experience_gen_iters:int = 5, # Number of iterations to generate expert experience
+        discriminator_train_iters = 5,
         test_iterations:int = 5,
         d_lr:float = 1e-3,
         buffer_capacity:int = 10000,
@@ -274,7 +289,7 @@ class TrainManager():
         gamma:float = 0.9,
         advantage_lambda:float = 0.95,
         clip_epsilon:float = 0.2,
-        train_iters:int = 10, 
+        ppo_train_iters:int = 10, 
         seed = 0,
         my_device = "cpu"
     ) -> None:
@@ -291,8 +306,9 @@ class TrainManager():
         
         self.log_output_path = log_output_path
         self.logger = logger(log_output_path=self.log_output_path)
+        self.expert_iters = expert_experience_gen_iters
         self.test_iterations = test_iterations
-        self.train_iterations = train_iterations
+        self.discriminator_train_iters = discriminator_train_iters
         
         self.env = env
         _,_ = self.env.reset(seed=self.seed)
@@ -314,14 +330,14 @@ class TrainManager():
             gamma = gamma,
             advantage_lambda = advantage_lambda,
             clip_epsilon = clip_epsilon,
-            train_iters = train_iters,
+            train_iters = ppo_train_iters,
             device = self.device
         )
         
         self.buffer = ReplayBuffer(capacity=buffer_capacity,device=self.device)
         d_network = Discriminator(obs_dim, action_dim).to(self.device)
         d_optimizer = torch.optim.Adam(d_network.parameters(), lr=d_lr)
-        self.gail = GAIL(action_dim, d_network, d_optimizer)
+        self.gail = GAIL(action_dim, d_network, d_optimizer, self.discriminator_train_iters)
         
         self.episode_total_rewards = np.zeros(self.episode_num)
         self.index_episode = 0
@@ -340,25 +356,29 @@ class TrainManager():
                 pbar.update(1)
     
     def train_episode(self) -> float:
+        # 1. --- Collect expert experience ---
         total_reward = 0
         options = {
             "Specific_Disturbance":None, 
             "Expert_Policy_Required":True, 
             "External_RNG":None
         }
-        # Ensure that the env has a solution
-        while True:
-            _, info = self.env.reset(options=options)
-            if info["Expert_Policy"] != None:
-                break
-        # Collect expert experience
-        X = info["Expert_Policy"]["Branch_Obs"] # s0-s4
-        Y = info["Expert_Policy"]["TieLine_Action"] # a1-a5
-        data = list(zip(X.T,Y))
-        for item in data:
-            self.buffer.append(item) # append data to buffer
+        exp_k = 0
+        while exp_k <= self.expert_iters:   
+            # Ensure that the env has a solution
+            while True:
+                _, info = self.env.reset(options=options)
+                if info["Expert_Policy"] != None:
+                    exp_k += 1
+                    break
+            # Collect expert experience
+            X = info["Expert_Policy"]["Branch_Obs"] # s0-s4
+            Y = info["Expert_Policy"]["TieLine_Action"] # a1-a5
+            data = list(zip(X.T,Y))
+            for item in data:
+                self.buffer.append(item) # append data to buffer
             
-        # Collect PPO experience
+        # 2. --- Train the target PPO agent ---
         self.agent.episode_recorder.reset()
         obs = None
         while True:
@@ -379,16 +399,17 @@ class TrainManager():
                 break
         
         agent_obs, agent_action, _, _, _ = self.agent.episode_recorder.get_trajectory()
+        
         reward = None            
-        for _ in range(self.train_iterations):
-            # obs_batch, action_batch = self.buffer.sample(batch_size=self.batch_size) # sample data
-            obs_batch, action_batch = self.buffer.fetch_all() # fetch all data
-            reward = self.gail.train_d(
-                            exp_obs = obs_batch,
-                            exp_action = action_batch,
-                            agent_obs = agent_obs,
-                            agent_action = agent_action
-                        )
+
+        # obs_batch, action_batch = self.buffer.sample(batch_size=self.batch_size) # sample data
+        obs_batch, action_batch = self.buffer.fetch_all(shuffle=True) # fetch all data
+        reward = self.gail.train_d(
+                        exp_obs = obs_batch,
+                        exp_action = action_batch,
+                        agent_obs = agent_obs,
+                        agent_action = agent_action
+                    )
         
         self.agent.episode_recorder.add_reward(reward)
         self.agent.train_policy()
@@ -484,17 +505,17 @@ class TrainManager():
 
 if __name__ == "__main__":
     current_path = os.getcwd()
-    log_output_path = current_path + "/results/GAIL_TieLine/n_2/"
+    log_output_path = current_path + "/results/GAIL_TieLine/n_1/"
     tensorboard_path = log_output_path + "tensorboard/"
     
     env = gym.make(
         "SelfHealing-v0",
-        opt_framework="JuMP",
-        solver="cplex",
+        opt_framework="Gurobipy",
+        solver="gurobi",
         data_file="Case_33BW_Data.xlsx",
         solver_display=False,
-        min_disturbance=2,
-        max_disturbance=2,
+        min_disturbance=1,
+        max_disturbance=1,
         vvo=False,
         Sb=100,
         V0=1.05,
@@ -506,15 +527,16 @@ if __name__ == "__main__":
         env = env,
         log_output_path = log_output_path,
         test_iterations=5,
-        train_iterations = 1,
+        expert_experience_gen_iters=5,
+        discriminator_train_iters=3,
         episode_num = 2000,
         d_lr = 1e-3,
-        actor_lr = 1e-3,
-        critic_lr = 1e-2,
+        actor_lr = 1e-4,
+        critic_lr = 1e-3,
         gamma = 0.98,
         advantage_lambda = 0.95,
         clip_epsilon = 0.2,
-        train_iters = 10, 
+        ppo_train_iters = 10,
         seed = 0,
         my_device = "cpu" 
     )

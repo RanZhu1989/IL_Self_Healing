@@ -13,6 +13,10 @@ from matplotlib import pyplot as plt
 import pandas as pd
 
 import selfhealing_env
+## --In case of import error when you have to use python-jl to run the code, please use the following import statement--
+import sys
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+# --------------------------------------------------------------------------------------------------------------
 from utils import logger
 
 class PPO_Clip_Agent():

@@ -6,8 +6,10 @@ import os
 import logging 
 import csv
 from datetime import datetime
-from typing import Optional, Tuple, Union 
+from typing import Optional, Tuple, Union
+from pathlib import Path
 import numpy as np
+import torch
 
 class logger:
     def __init__(
@@ -30,11 +32,10 @@ class logger:
             self.disturb_log_path = output_path + "/" + "disturb" + dt_string + ".csv"
             self.agent_recovery_rate_log_path = output_path + "/" + "agent_recovery_rate" + dt_string + ".csv"
             self.expert_recovery_rate_log_path = output_path + "/" + "expert_recovery_rate" + dt_string + ".csv"
+            self.success_rate_log_path = output_path + "/" + "success_rate" + dt_string + ".csv"
+            
         else:
-            # if given, check if the saving directory exists
-            # if not given, create dir
-            if not os.path.isdir(log_output_path):
-                os.makedirs(log_output_path)
+            ensure_directory(log_output_path)
             event_log_output_path = log_output_path + "/" + "log" + dt_string + ".log"
             self.disturb_log_path = log_output_path + "/" + "disturb" + dt_string + ".csv"
             self.agent_recovery_rate_log_path = log_output_path + "/" + "agent_recovery_rate" + dt_string + ".csv"
@@ -66,19 +67,57 @@ class logger:
         expert_recovery_rate:Union[list, np.ndarray],
         success_rate:Union[list, np.ndarray]
     ) -> None:
-        self._save_csv(self.disturb_log_path, disturb)
-        self._save_csv(self.agent_recovery_rate_log_path, agent_recovery_rate)
-        self._save_csv(self.expert_recovery_rate_log_path, expert_recovery_rate)
-        self._save_csv(self.success_rate_log_path, success_rate)
+        _save_csv(self.disturb_log_path, disturb)
+        _save_csv(self.agent_recovery_rate_log_path, agent_recovery_rate)
+        _save_csv(self.expert_recovery_rate_log_path, expert_recovery_rate)
+        _save_csv(self.success_rate_log_path, success_rate)
+        
     
-    def _save_csv(
-        self, 
-        path:str, 
-        score:Union[list, np.ndarray]
-    ) -> None:
-        if not os.path.exists(path):
-            with open(path, "w"):
-                pass
-        with open(path, "a", newline="") as csv_file:
-            writer = csv.writer(csv_file)
-            writer.writerow(score)
+def _save_csv(
+    path:str, 
+    score:Union[list, np.ndarray]
+) -> None:
+    if not os.path.exists(path):
+        with open(path, "w"):
+            pass
+    with open(path, "a", newline="") as csv_file:
+        writer = csv.writer(csv_file)
+        writer.writerow(score)
+
+def get_time()->str:
+    return datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+
+
+def ensure_directory(directory:Union[Path, str])->None:
+    if not os.path.exists(directory):
+        os.makedirs(directory)
+    pass
+
+def find_1Dtensor_value_indices(tensor: torch.Tensor, value_range: int) -> dict:
+    """
+    Finds indices for each value in a given tensor within a specified range.
+
+    Parameters:
+    - tensor (torch.Tensor): The input tensor.
+    - value_range (int): The range of values to search for in the tensor.
+
+    Returns:
+    - dict: A dictionary where keys are the values within the specified range,
+            and values are lists of indices where those values occur in the tensor.
+    """
+    value_indices = {}
+    for value in range(value_range):  # Iterate through the specified range of values
+        indices = torch.where(tensor == value)[0].tolist()  # Find indices of the current value
+        value_indices[value] = indices  # Store indices in the dictionary
+    return value_indices
+
+
+def check_cuda()->torch.device:
+    # check cuda
+    use_gpu = torch.cuda.is_available()
+    if use_gpu:
+        # print('use_gpu ==', use_gpu)
+        # print('device_ids ==', np.arange(0, torch.cuda.device_count()))
+        return torch.device('cuda')
+    else:
+        return torch.device('cpu')

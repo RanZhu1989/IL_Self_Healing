@@ -70,6 +70,9 @@ class SelfHealing_Env(gym.Env):
             elif solver == "gurobi":
                 self.solver = "Gurobi"
                 
+            elif solver == "glpk":
+                self.solver = "GLPK"
+                
             else:
                 raise Exception("Solver not supported!")
             

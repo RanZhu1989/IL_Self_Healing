@@ -4,7 +4,7 @@ from stable_baselines3.common.env_checker import check_env
 
 env = gym.make("SelfHealing-v0",
                opt_framework="JuMP",
-               solver="cplex",
+               solver="glpk",
                data_file="Case_33BW_Data.xlsx",
                solver_display=False,
                min_disturbance=2, 

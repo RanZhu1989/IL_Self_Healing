@@ -425,6 +425,18 @@ function init_opf_core(;
         reset_model_optimizer = optimizer_with_attributes(
             Gurobi.Optimizer, "output_flag" => display, "MIPGap" => MIP_gap_reset_model
         )
+    elseif solver == "GLPK"
+        expert_model_optimizer = optimizer_with_attributes(
+            GLPK.Optimizer, "msg_lev" => display, "mip_gap" => MIP_gap_expert_model
+        )
+        step_model_optimizer = optimizer_with_attributes(
+            GLPK.Optimizer, "msg_lev" => display, "mip_gap" => MIP_gap_step_model
+        )
+        reset_model_optimizer = optimizer_with_attributes(
+            GLPK.Optimizer, "msg_lev" => display, "mip_gap" => MIP_gap_reset_model
+        )
+    
+
     else
         #NOTE: Add more solvers if needed
         error("solver not supported")

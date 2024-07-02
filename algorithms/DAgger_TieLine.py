@@ -18,8 +18,14 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from utils import logger, check_cuda, get_time
 from configs import args
 
-class BC_Agent():
-    """Behavioral Cloning Agent"""
+class DAgger_Agent():
+    """
+    Dataset Aggregation (DAgger) Agent
+    
+    The simplest way to improve the performance of behavioral cloning is 
+    to 'ASK' the expert when encounter to new states.
+    
+    """
     def __init__(self,
         input_dim:int,
         output_dim:int,
@@ -54,7 +60,6 @@ class BC_Agent():
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
-        pass
         
         
 class Policy_Network(torch.nn.Module):
@@ -89,11 +94,11 @@ class ReplayBuffer():
         
     def sample(self,
                batch_size:int,
-               shuffle:bool=True
+               shuffle:bool = True
                ) -> Tuple[torch.tensor,torch.tensor]:
         batch_size = min(batch_size, len(self.buffer)) # in case the buffer is not enough
         if shuffle:
-            self.buffer = random.sample(self.buffer,len(self.buffer))
+            self.buffer = random.sample(self.buffer,len(self.buffer))      
         mini_batch = random.sample(self.buffer,batch_size)
         obs_batch, action_batch = zip(*mini_batch)
         obs_batch = torch.tensor(np.array(obs_batch),dtype=torch.float32,device=self.device)
@@ -101,7 +106,9 @@ class ReplayBuffer():
           
         return obs_batch, action_batch
     
-    def fetch_all(self) -> Tuple[torch.tensor,torch.tensor]:
+    def fetch_all(self,shuffle:bool = True) -> Tuple[torch.tensor,torch.tensor]:
+        if shuffle:
+            self.buffer = random.sample(self.buffer,len(self.buffer))
         obs_batch, action_batch = zip(*self.buffer)
         obs_batch = torch.tensor(np.array(obs_batch),dtype=torch.float32,device=self.device)
         action_batch = torch.tensor(np.array(action_batch),dtype=torch.int64,device=self.device) 
@@ -121,8 +128,8 @@ class TrainManager():
         env:gym.Env,
         log_output_path:Optional[str]=None,
         lr:float = 0.001,
-        training_epochs:int = 500,
-        expert_sample_used:int = 50, # use # samples to train the agent
+        train_iterations:int = 10,
+        episode_num:int = 200,
         buffer_capacity:int = 1000000,
         batch_size:int = 32,
         test_iterations:int = 5,
@@ -145,13 +152,13 @@ class TrainManager():
         self.device = device
         policy_network = Policy_Network(self.obs_dim, self.action_dim).to(self.device)
         optimizer = torch.optim.Adam(policy_network.parameters(), lr=lr)
-        self.training_epochs = training_epochs
-        self.expert_sample_used = expert_sample_used
+        self.train_iterations = train_iterations
+        self.episode_num = episode_num
         self.batch_size = batch_size
         self.log_output_path = log_output_path
         self.test_iterations = test_iterations
         
-        self.agent = BC_Agent(
+        self.agent = DAgger_Agent(
             input_dim = self.obs_dim, output_dim = self.action_dim,
             policy_network = policy_network, optimizer = optimizer,
             device = self.device
@@ -163,48 +170,40 @@ class TrainManager():
         pass
         
     def train(self) -> None:
-        # 1. Collect expert data
-        self.logger.event_logger.info(
-                    f"=============== Expert Data Collection ================="
-                )
-        options = {
-            "Specific_Disturbance":None, 
-            "Expert_Policy_Required":True, 
-            "External_RNG":None
-            }
-        sampled_idx = 0
-        with tqdm(total=self.expert_sample_used, desc='Collecting Expert Data') as pbar:
-            while sampled_idx < self.expert_sample_used:
-                # Ensure that the env has a solution
-                while True:
-                    _, info = self.env.reset(options=options)
-                    if info["Expert_Policy"] != None:
-                        sampled_idx += 1
-                        break
-                # Collect expert experience
-                X = info["Expert_Policy"]["Branch_Obs"] # s0-s4
-                Y = info["Expert_Policy"]["TieLine_Action"] # a1-a5
-                data = list(zip(X.T,Y))
-                for item in data:
-                    self.buffer.append(item) # append data to buffer
-                pbar.update(1)
-        
-        # 2. Train the agent        
-        with tqdm(total=self.training_epochs, desc='BC Training') as pbar:
-            for e in range(self.training_epochs):
-                x_batch, y_batch = self.buffer.sample(batch_size=self.batch_size,shuffle=True)
-                self.agent.learn(x_batch,y_batch)
+        with tqdm(total=self.episode_num, desc='Training') as pbar:
+            for idx_episode in range(self.episode_num):
                 self.logger.event_logger.info(
-                    f"=============== Epoch {e+1:d} of {self.training_epochs:d} ================="
+                    f"=============== Episode {idx_episode+1:d} of {self.episode_num:d} ================="
                 )
+                self.train_episode()
                 # run test
                 avg_test_success_rate = self.test()
                 pbar.set_postfix({"test_avg_rate":avg_test_success_rate})
                 pbar.update(1)
-                pass
-            pass
+                          
+    def train_episode(self) -> None:
+        options = {
+            "Specific_Disturbance":None, 
+            "Expert_Policy_Required":True, 
+            "External_RNG":None
+        }
+        # Ensure that the env has a solution
+        while True:
+            _, info = self.env.reset(options=options)
+            if info["Expert_Policy"] != None:
+                break
+        # Collect expert experience
+        X = info["Expert_Policy"]["Branch_Obs"] # s0-s4
+        Y = info["Expert_Policy"]["TieLine_Action"] # a1-a5
+        data = list(zip(X.T,Y))
+        for item in data:
+            self.buffer.append(item) # append data to buffer
         
-    def test(self) -> float:
+        for _ in range(self.train_iterations):
+            obs_batch, action_batch = self.buffer.sample(batch_size=self.batch_size) # sample data
+            self.agent.learn(obs_batch,action_batch)
+       
+    def test(self) -> None:
         options = {
             "Specific_Disturbance":None,
             "Expert_Policy_Required":True,
@@ -297,7 +296,7 @@ if __name__ == "__main__":
     )
     
     current_path = os.getcwd()
-    task_name = 'BC_TieLine'
+    task_name = 'DAgger_TieLine'
     log_output_path = current_path + "/" + args.result_folder_name + "/" + task_name + \
                     ("_n_" + str(args.min_disturbance) + "to" + str(args.max_disturbance)
                         + "_" + get_time() + "/" )
@@ -312,15 +311,16 @@ if __name__ == "__main__":
     manager = TrainManager(
         env=env,
         log_output_path = log_output_path,
-        training_epochs=args.train_epochs,
-        expert_sample_used=args.BC_used_samples,
+        episode_num=args.train_epochs,
+        train_iterations=args.DAgger_update_iters,
         batch_size=args.IL_batch_size,
         lr=args.IL_lr,
         test_iterations=args.test_iterations, 
         device=device,
         seed=args.seed
     )
-    
+
+
     manager.logger.event_logger.info(
             f"=============== Task Info =================")
     manager.logger.event_logger.info(
@@ -333,4 +333,3 @@ if __name__ == "__main__":
         f"min_disturbance == {args.min_disturbance}, max_disturbance == {args.max_disturbance}")
 
     manager.train()
-    
