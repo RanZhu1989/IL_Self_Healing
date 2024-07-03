@@ -1,5 +1,4 @@
 import os
-import time
 import collections
 import random
 from tqdm import tqdm
@@ -313,7 +312,7 @@ if __name__ == "__main__":
         env=env,
         log_output_path = log_output_path,
         training_epochs=args.train_epochs,
-        expert_sample_used=args.BC_used_samples,
+        expert_sample_used=args.IL_used_samples,
         batch_size=args.IL_batch_size,
         lr=args.IL_lr,
         test_iterations=args.test_iterations, 

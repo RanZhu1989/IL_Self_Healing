@@ -1,5 +1,4 @@
 import os
-import time
 import collections
 import random
 from tqdm import tqdm
@@ -17,7 +16,8 @@ import selfhealing_env
 import sys
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 # --------------------------------------------------------------------------------------------------------------
-from utils import logger
+from utils import logger, check_cuda, get_time
+from configs import args
 
 # PPO Agent
 class PPO_Clip_Agent():
@@ -193,8 +193,13 @@ class ReplayBuffer():
     def append(self,exp_data:tuple) -> None:
         self.buffer.append(exp_data)
         
-    def sample(self,batch_size:int) -> Tuple[torch.tensor,torch.tensor]:
-        batch_size = min(batch_size, len(self.buffer)) # in case the buffer is not enough        
+    def sample(self,
+               batch_size:int,
+               shuffle:bool = True
+               ) -> Tuple[torch.tensor,torch.tensor]:
+        batch_size = min(batch_size, len(self.buffer)) # in case the buffer is not enough
+        if shuffle:
+            self.buffer = random.sample(self.buffer,len(self.buffer))        
         mini_batch = random.sample(self.buffer,batch_size)
         obs_batch, action_batch = zip(*mini_batch)
         obs_batch = torch.tensor(np.array(obs_batch),dtype=torch.float32,device=self.device)
@@ -206,7 +211,7 @@ class ReplayBuffer():
                   shuffle:bool = True
                   ) -> Tuple[torch.tensor,torch.tensor]:
         if shuffle:
-            random.shuffle(self.buffer)
+            self.buffer = random.sample(self.buffer,len(self.buffer))
         obs_batch, action_batch = zip(*self.buffer)
         obs_batch = torch.tensor(np.array(obs_batch),dtype=torch.float32,device=self.device)
         action_batch = torch.tensor(np.array(action_batch),dtype=torch.int64,device=self.device) 
@@ -279,7 +284,7 @@ class TrainManager():
         env:gym.Env,
         log_output_path:Optional[str]=None,
         episode_num:int = 1000,
-        expert_experience_gen_iters:int = 5, # Number of iterations to generate expert experience
+        expert_sample_used:int = 50, # use # samples to train the agent
         discriminator_train_iters = 5,
         test_iterations:int = 5,
         d_lr:float = 1e-3,
@@ -290,8 +295,8 @@ class TrainManager():
         advantage_lambda:float = 0.95,
         clip_epsilon:float = 0.2,
         ppo_train_iters:int = 10, 
-        seed = 0,
-        my_device = "cpu"
+        seed:int = 0,
+        device:torch.device = torch.device("cpu") 
     ) -> None:
         
         self.seed = seed 
@@ -302,11 +307,11 @@ class TrainManager():
         np.random.seed(self.seed)
         torch.backends.cudnn.deterministic = True
         
-        self.device = torch.device(my_device)
+        self.device = device
         
         self.log_output_path = log_output_path
         self.logger = logger(log_output_path=self.log_output_path)
-        self.expert_iters = expert_experience_gen_iters
+        self.expert_sample_used = expert_sample_used
         self.test_iterations = test_iterations
         self.discriminator_train_iters = discriminator_train_iters
         
@@ -343,7 +348,34 @@ class TrainManager():
         self.index_episode = 0
         
     def train(self) -> None:
-        tic = time.perf_counter()  # start clock
+        # 1. Collect expert data
+        self.logger.event_logger.info(
+                    f"=============== Expert Data Collection ================="
+                )
+        options = {
+            "Specific_Disturbance":None, 
+            "Expert_Policy_Required":True, 
+            "External_RNG":None
+            }
+        sampled_idx = 0
+        with tqdm(total=self.expert_sample_used, desc='Collecting Expert Data') as pbar:
+            while sampled_idx < self.expert_sample_used:
+                # Ensure that the env has a solution
+                while True:
+                    _, info = self.env.reset(options=options)
+                    if info["Expert_Policy"] != None:
+                        sampled_idx += 1
+                        break
+                # Collect expert experience
+                X = info["Expert_Policy"]["Branch_Obs"] # s0-s4
+                Y = info["Expert_Policy"]["TieLine_Action"] # a1-a5
+                data = list(zip(X.T,Y))
+                for item in data:
+                    self.buffer.append(item) # append data to buffer
+                pbar.update(1)
+        
+        # 2. Train the target PPO agent via interacting with the environment
+        
         with tqdm(total=self.episode_num, desc='Training') as pbar:
             for e in range(self.episode_num):
                 self.logger.event_logger.info(
@@ -351,34 +383,16 @@ class TrainManager():
                 )
                 episode_reward = self.train_episode()
                 self.test()
-                toc = time.perf_counter()
-                pbar.set_postfix({"Training time": f"{toc - tic:0.2} seconds", "Return": (episode_reward)})
+                pbar.set_postfix({"Return": (episode_reward)})
                 pbar.update(1)
     
     def train_episode(self) -> float:
-        # 1. --- Collect expert experience ---
-        total_reward = 0
+        # Start a new episode
         options = {
             "Specific_Disturbance":None, 
             "Expert_Policy_Required":True, 
             "External_RNG":None
-        }
-        exp_k = 0
-        while exp_k <= self.expert_iters:   
-            # Ensure that the env has a solution
-            while True:
-                _, info = self.env.reset(options=options)
-                if info["Expert_Policy"] != None:
-                    exp_k += 1
-                    break
-            # Collect expert experience
-            X = info["Expert_Policy"]["Branch_Obs"] # s0-s4
-            Y = info["Expert_Policy"]["TieLine_Action"] # a1-a5
-            data = list(zip(X.T,Y))
-            for item in data:
-                self.buffer.append(item) # append data to buffer
-            
-        # 2. --- Train the target PPO agent ---
+            }
         self.agent.episode_recorder.reset()
         obs = None
         while True:
@@ -386,6 +400,7 @@ class TrainManager():
             if info["Expert_Policy"] != None:
                 break
             
+        total_reward = 0
         while True:
             action = self.agent.get_action(obs).item() 
             next_obs, reward, terminated, truncated, _ = self.env.step(action)
@@ -397,11 +412,13 @@ class TrainManager():
                 self.episode_total_rewards[self.index_episode] = total_reward
                 self.index_episode += 1
                 break
-        
+        # Get the trajectory
         agent_obs, agent_action, _, _, _ = self.agent.episode_recorder.get_trajectory()
         
+        # Set the temporary reward to None
         reward = None            
 
+        # Train the discriminator to get the reward
         # obs_batch, action_batch = self.buffer.sample(batch_size=self.batch_size) # sample data
         obs_batch, action_batch = self.buffer.fetch_all(shuffle=True) # fetch all data
         reward = self.gail.train_d(
@@ -411,7 +428,10 @@ class TrainManager():
                         agent_action = agent_action
                     )
         
+        # Update the reward
         self.agent.episode_recorder.add_reward(reward)
+        
+        # Train the target PPO agent
         self.agent.train_policy()
         
         return total_reward
@@ -504,42 +524,62 @@ class TrainManager():
         
 
 if __name__ == "__main__":
+    env = gym.make(
+        id=args.env_id,
+        opt_framework=args.opt_framework,
+        solver=args.solver,
+        data_file=args.data_file,
+        solver_display=args.solver_display,
+        min_disturbance=args.min_disturbance,
+        max_disturbance=args.max_disturbance,
+        vvo=False,
+        Sb=args.Sb,
+        V0=args.V0,
+        V_min=args.V_min,
+        V_max=args.V_max
+    )
+    
     current_path = os.getcwd()
-    log_output_path = current_path + "/results/GAIL_TieLine/n_1/"
+    task_name = 'GAIL_TieLine'
+    log_output_path = current_path + "/" + args.result_folder_name + "/" + task_name + \
+                    ("_n_" + str(args.min_disturbance) + "to" + str(args.max_disturbance)
+                        + "_" + get_time() + "/" )
+
     tensorboard_path = log_output_path + "tensorboard/"
     
-    env = gym.make(
-        "SelfHealing-v0",
-        opt_framework="Gurobipy",
-        solver="gurobi",
-        data_file="Case_33BW_Data.xlsx",
-        solver_display=False,
-        min_disturbance=1,
-        max_disturbance=1,
-        vvo=False,
-        Sb=100,
-        V0=1.05,
-        V_min=0.95,
-        V_max=1.05
-    )
+    if args.forced_cpu:
+        device = torch.device("cpu")
+    else:
+        device = check_cuda()
     
-    Manger = TrainManager(
+    manager = TrainManager(
         env = env,
         log_output_path = log_output_path,
-        test_iterations=5,
-        expert_experience_gen_iters=5,
-        discriminator_train_iters=3,
-        episode_num = 2000,
-        d_lr = 1e-3,
-        actor_lr = 1e-4,
-        critic_lr = 1e-3,
-        gamma = 0.98,
-        advantage_lambda = 0.95,
-        clip_epsilon = 0.2,
-        ppo_train_iters = 10,
-        seed = 0,
-        my_device = "cpu" 
+        test_iterations=args.test_iterations,
+        expert_sample_used = args.IL_used_samples, 
+        discriminator_train_iters=args.GAIL_d_iters,
+        episode_num = args.train_epochs,
+        d_lr = args.GAIL_d_lr,
+        actor_lr = args.PPO_actor_lr,
+        critic_lr = args.PPO_critic_lr,
+        gamma = args.PPO_gamma,
+        advantage_lambda = args.PPO_advantage_lambda,
+        clip_epsilon = args.PPO_clip_epsilon,
+        ppo_train_iters = args.PPO_train_iters,
+        seed = args.seed,
+        device = device
     )
     
-    Manger.train()
-    Manger.plotting(smoothing_window = 10)   
+    manager.logger.event_logger.info(
+            f"=============== Task Info =================")
+    manager.logger.event_logger.info(
+        f"ENV Settings == {args.env_id}, Device == {device}, Seed == {args.seed}")
+    manager.logger.event_logger.info(
+        f"Task == {task_name}, Training Epochs == {args.train_epochs}, Test Iterations == {args.test_iterations}")
+    manager.logger.event_logger.info(
+        f"Opt_Framework == {args.opt_framework}, Solver == {args.solver}, system_file == {args.data_file}")
+    manager.logger.event_logger.info(
+        f"min_disturbance == {args.min_disturbance}, max_disturbance == {args.max_disturbance}")
+    
+    manager.train()
+    manager.plotting(smoothing_window = 10)   

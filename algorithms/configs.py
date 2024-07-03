@@ -2,6 +2,7 @@ import argparse
 
 parser = argparse.ArgumentParser()
 
+# TODO: Current python-julia can not use argparse, so we need to set the parameters in the code
 # Environment
 parser.add_argument('--env_id', default='SelfHealing-v0')
 parser.add_argument('--data_file', default='Case_33BW_Data.xlsx')
@@ -21,20 +22,20 @@ parser.add_argument('--result_folder_name', default='results')
 parser.add_argument('--forced_cpu', default=False)
 parser.add_argument('--seed', default=0)
 parser.add_argument('--test_iterations', default=5)
-parser.add_argument('--train_epochs', default=200)
+parser.add_argument('--train_epochs', default=500)
 
 
 # Imitation learning parameters
 parser.add_argument('--IL_lr', default=1.0e-3)
 parser.add_argument('--IL_batch_size', default=32)
-parser.add_argument('--BC_used_samples', default=100)
+parser.add_argument('--IL_used_samples', default=250)
 parser.add_argument('--DAgger_update_iters', default=5)
-parser.add_argument('--GAIL_d_iters', default=3)
+parser.add_argument('--GAIL_d_iters', default=5)
 parser.add_argument('--GAIL_d_lr', default=1.0e-3)
 
 # PPO parameters
-parser.add_argument('--PPO_actor_lr', default=1.0e-4)
-parser.add_argument('--PPO_critic_lr', default=1.0e-3)
+parser.add_argument('--PPO_actor_lr', default=1.0e-3)
+parser.add_argument('--PPO_critic_lr', default=1.0e-2)
 parser.add_argument('--PPO_gamma', default=0.98)
 parser.add_argument('--PPO_advantage_lambda', default=0.95)
 parser.add_argument('--PPO_clip_epsilon', default=0.2)

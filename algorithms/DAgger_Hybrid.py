@@ -1,5 +1,4 @@
 import os
-import time
 import collections
 import random
 from tqdm import tqdm

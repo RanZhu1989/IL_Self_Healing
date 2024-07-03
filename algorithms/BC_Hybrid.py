@@ -395,7 +395,7 @@ if __name__ == "__main__":
         env=env,
         log_output_path = log_output_path,
         training_epochs=args.train_epochs,
-        expert_sample_used=args.BC_used_samples,
+        expert_sample_used=args.IL_used_samples,
         batch_size=args.IL_batch_size,
         lr=args.IL_lr,
         test_iterations=args.test_iterations, 
@@ -408,7 +408,7 @@ if __name__ == "__main__":
     manager.logger.event_logger.info(
         f"ENV Settings == {args.env_id}, Device == {device}, Seed == {args.seed}")
     manager.logger.event_logger.info(
-        f"Task == {task_name}, Training Epochs == {args.train_epochs}, Test Iterations == {args.test_iterations}")
+        f"Task == {task_name}, Expert Sample Used == {args.IL_used_samples}, Test Iterations == {args.test_iterations}")
     manager.logger.event_logger.info(
         f"Opt_Framework == {args.opt_framework}, Solver == {args.solver}, system_file == {args.data_file}")
     manager.logger.event_logger.info(
