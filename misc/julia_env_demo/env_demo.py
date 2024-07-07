@@ -4,7 +4,7 @@ from gymnasium.utils import seeding
 
 from sys_data import System_Data
 
-from julia import Main as jl
+from juliacall import Main as jl
 
 import numpy as np
 
@@ -56,7 +56,7 @@ class SelfHealing_env(gym.Env):
         # 目标是建立三个opf模型 分别是Expert, Reset, Step
         '''
         #TODO Add Gurobipy env support : Create & initialize env
-        jl.eval("using " + self.solver)
+        jl.seval("using " + self.solver)
         jl.include("OPF_Core.jl")
         jl.init_opf_core(args_expert=self.system_data.args_expert,
                          args_step=self.system_data.args_step,

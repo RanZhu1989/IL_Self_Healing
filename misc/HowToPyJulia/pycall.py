@@ -2,7 +2,7 @@
 # 首先调用julia脚本建立基于JuMP的优化模型并求解
 # 然后通过python给出新的约束条件，再次求解
 
-from julia import Main as jl
+from juliacall import Main as jl
 
 jl.include("lp.jl") # 求解优化问题，并打印问题
 

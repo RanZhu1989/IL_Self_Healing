@@ -1,4 +1,4 @@
-from julia import Main as jl
+from juliacall import Main as jl
 
 jl.include("jtest.jl") # 求解优化问题，并打印问题
 

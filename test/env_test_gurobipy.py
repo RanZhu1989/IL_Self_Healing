@@ -10,7 +10,11 @@ env = gym.make("SelfHealing-v0",
                solver_display=True,
                min_disturbance=2, 
                max_disturbance=5, 
-               vvo=False)
+               vvo=False,
+               Sb=100,
+               V0=1.05,
+               V_min = 0.95,
+               V_max = 1.05)
 reset_option = {
     "Specific_Disturbance": [12,17,21],
     "Expert_Policy_Required": True,

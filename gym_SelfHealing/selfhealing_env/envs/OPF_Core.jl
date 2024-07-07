@@ -1,5 +1,6 @@
 # Core OPF models for SelfHealingEnv
 using JuMP
+using PythonCall
 
 struct OPF_Core
     """
@@ -36,16 +37,16 @@ struct OPF_Core
     reset_model::JuMP.Model
     
     function OPF_Core(
-        args_expert::Tuple{Int64, Int64, Int64, Int64, Int64, Matrix{Float64}, Int64,
-                            Matrix{Float64},Matrix{Float64}, Matrix{Float64}, Int64, 
-                            Float64, Float64, Float64, Matrix{Float64}, Matrix{Float64}, 
-                            Matrix{Float64}, Matrix{Float64}, Matrix{Float64}, Matrix{Float64}, 
-                            Matrix{Float64}, Int64, Matrix{Float64}, Int64},
+        args_expert::Tuple{Int64, Int64, Int64, Int64, Int64, Union{Matrix{Float64}, PyArray}, Int64,
+                            Union{Matrix{Float64}, PyArray},Union{Matrix{Float64}, PyArray}, Union{Matrix{Float64}, PyArray}, Int64, 
+                            Float64, Float64, Float64, Union{Matrix{Float64}, PyArray}, Union{Matrix{Float64}, PyArray}, 
+                            Union{Matrix{Float64}, PyArray}, Union{Matrix{Float64}, PyArray}, Union{Matrix{Float64}, PyArray}, Union{Matrix{Float64}, PyArray}, 
+                            Union{Matrix{Float64}, PyArray}, Int64, Union{Matrix{Float64}, PyArray}, Int64},
 
-        args_step::Tuple{Int64, Int64, Int64, Int64, Int64, Matrix{Float64}, Int64, 
-                            Matrix{Float64},Vector{Float64}, Vector{Float64}, Int64, Float64, 
-                            Float64, Float64, Vector{Float64},Vector{Float64}, Vector{Float64}, 
-                            Vector{Float64}, Vector{Float64}, Vector{Float64},Vector{Float64}, Matrix{Float64}, Int64}
+        args_step::Tuple{Int64, Int64, Int64, Int64, Int64, Union{Matrix{Float64}, PyArray}, Int64, 
+                            Union{Matrix{Float64}, PyArray},Union{Vector{Float64}, PyArray}, Union{Vector{Float64}, PyArray}, Int64, Float64, 
+                            Float64, Float64, Union{Vector{Float64}, PyArray},Union{Vector{Float64}, PyArray}, Union{Vector{Float64}, PyArray}, 
+                            Union{Vector{Float64}, PyArray}, Union{Vector{Float64}, PyArray}, Union{Vector{Float64}, PyArray},Union{Vector{Float64}, PyArray}, Union{Matrix{Float64}, PyArray}, Int64}
     )
         expert_model = make_expert_model(args_expert)
         step_model = make_step_model(args_step)
@@ -372,15 +373,15 @@ Servel utility functions are defined for managing the core in an external way:
 """
 
 function init_opf_core(; 
-    args_expert::Tuple{Int64, Int64, Int64, Int64, Int64, Matrix{Float64}, Int64,
-                        Matrix{Float64},Matrix{Float64}, Matrix{Float64}, Int64, 
-                        Float64, Float64, Float64, Matrix{Float64}, Matrix{Float64}, 
-                        Matrix{Float64}, Matrix{Float64}, Matrix{Float64}, Matrix{Float64}, 
-                        Matrix{Float64}, Int64, Matrix{Float64}, Int64},
-    args_step::Tuple{Int64, Int64, Int64, Int64, Int64, Matrix{Float64}, Int64, 
-                        Matrix{Float64},Vector{Float64}, Vector{Float64}, Int64, Float64, 
-                        Float64, Float64, Vector{Float64},Vector{Float64}, Vector{Float64}, 
-                        Vector{Float64}, Vector{Float64}, Vector{Float64},Vector{Float64}, Matrix{Float64}, Int64},
+    args_expert::Tuple{Int64, Int64, Int64, Int64, Int64, Union{Matrix{Float64}, PyArray}, Int64,
+                        Union{Matrix{Float64}, PyArray},Union{Matrix{Float64}, PyArray}, Union{Matrix{Float64}, PyArray}, Int64, 
+                        Float64, Float64, Float64, Union{Matrix{Float64}, PyArray}, Union{Matrix{Float64}, PyArray}, 
+                        Union{Matrix{Float64}, PyArray}, Union{Matrix{Float64}, PyArray}, Union{Matrix{Float64}, PyArray}, Union{Matrix{Float64}, PyArray}, 
+                        Union{Matrix{Float64}, PyArray}, Int64, Union{Matrix{Float64}, PyArray}, Int64},
+    args_step::Tuple{Int64, Int64, Int64, Int64, Int64, Union{Matrix{Float64}, PyArray}, Int64, 
+                        Union{Matrix{Float64}, PyArray},Union{Vector{Float64}, PyArray}, Union{Vector{Float64}, PyArray}, Int64, Float64, 
+                        Float64, Float64, Union{Vector{Float64}, PyArray},Union{Vector{Float64}, PyArray}, Union{Vector{Float64}, PyArray}, 
+                        Union{Vector{Float64}, PyArray}, Union{Vector{Float64}, PyArray}, Union{Vector{Float64}, PyArray},Union{Vector{Float64}, PyArray}, Union{Matrix{Float64}, PyArray}, Int64},
     solver::String="CPLEX",
     MIP_gap_expert_model::Float64=1e-4,
     MIP_gap_step_model::Float64=1e-4,
@@ -448,7 +449,7 @@ function init_opf_core(;
 
 end
 
-function set_dmg(a_input::Matrix{Float64})
+function set_dmg(a_input::Union{Matrix{Float64}, PyArray})
     """
     Set the damaged lines for ALL three models. 
     In each episode, this function should be called ONLY ONE time when the disturbances are determined.
@@ -467,9 +468,9 @@ function set_dmg(a_input::Matrix{Float64})
 end
 
 function set_ExpertModel(;
-    X_tieline0_input::Vector{Float64},
-    X_rec0_input::Vector{Int8},
-    X_line0_input::Vector{Int8},
+    X_tieline0_input::Union{Vector{Float64}, PyArray},
+    X_rec0_input::Union{Vector{Int8},PyArray},
+    X_line0_input::Union{Vector{Int8},PyArray},
     vvo::Bool=true
 )
     """
@@ -498,9 +499,9 @@ function set_ExpertModel(;
 end
 
 function set_StepModel(; 
-    X_rec0_input::Vector{Int8},
-    X_tieline_input::Vector{Int8},
-    Q_svc_input::Union{Vector{Float64},Nothing} =nothing,
+    X_rec0_input::Union{Vector{Int8},PyArray},
+    X_tieline_input::Union{Vector{Int8},PyArray},
+    Q_svc_input::Union{Vector{Float64},PyArray,Nothing}=nothing,
     vvo::Bool=true
 )
     """
@@ -532,8 +533,8 @@ function set_StepModel(;
 end
 
 function set_ResetModel(; 
-    X_tieline_input::Vector{Float64}, 
-    Q_svc_input::Vector{Float64}
+    X_tieline_input::Union{Vector{Float64}, PyArray}, 
+    Q_svc_input::Union{Vector{Float64}, PyArray}
 )
     """
     Set the parameters for reset model.
@@ -551,9 +552,9 @@ function set_ResetModel(;
     
 end
 
-function solve_ExpertModel()::Tuple{Bool, Union{Nothing, Matrix{Float64}}, Union{Nothing, Matrix{Float64}}, Union{Nothing, Matrix{Float64}}, 
-                                    Union{Nothing, Matrix{Float64}}, Union{Nothing, Matrix{Float64}}, Union{Nothing, Matrix{Float64}},
-                                    Union{Nothing, Matrix{Float64}}, Union{Nothing, Matrix{Float64}}}
+function solve_ExpertModel()::Tuple{Bool, Union{Nothing, Matrix{Float64},PyArray}, Union{Nothing, Matrix{Float64},PyArray}, Union{Nothing, Matrix{Float64},PyArray}, 
+                                    Union{Nothing, Matrix{Float64},PyArray}, Union{Nothing, Matrix{Float64},PyArray}, Union{Nothing, Matrix{Float64},PyArray},
+                                    Union{Nothing, Matrix{Float64},PyArray}, Union{Nothing, Matrix{Float64},PyArray}}
     """
     Solve the expert model and return the results. The model can be infeasible.
     """
@@ -579,9 +580,9 @@ function solve_ExpertModel()::Tuple{Bool, Union{Nothing, Matrix{Float64}}, Union
 
 end
 
-function solve_StepModel()::Tuple{Bool, Union{Nothing, Vector{Float64}}, Union{Nothing, Vector{Float64}}, 
-                                    Union{Nothing, Vector{Float64}}, Union{Nothing, Vector{Float64}}, 
-                                    Union{Nothing, Vector{Float64}}, Union{Nothing, Float64}, Union{Nothing, Float64}}
+function solve_StepModel()::Tuple{Bool, Union{Nothing, Union{Vector{Float64}, PyArray}}, Union{Nothing, Vector{Float64}, PyArray}, 
+                                    Union{Nothing, Vector{Float64}, PyArray}, Union{Nothing, Vector{Float64}, PyArray}, 
+                                    Union{Nothing, Vector{Float64}, PyArray}, Union{Nothing, Float64}, Union{Nothing, Float64}}
     """
     Solve the step model and return the results. The model can be infeasible.
     """
@@ -608,8 +609,8 @@ function solve_StepModel()::Tuple{Bool, Union{Nothing, Vector{Float64}}, Union{N
     end
 end
 
-function solve_ResetModel()::Tuple{Vector{Float64}, Vector{Float64}, Vector{Float64}, 
-                                    Vector{Float64}, Vector{Float64}, Float64}
+function solve_ResetModel()::Tuple{Union{Vector{Float64}, PyArray}, Union{Vector{Float64}, PyArray}, Union{Vector{Float64}, PyArray}, 
+                                    Union{Vector{Float64}, PyArray}, Union{Vector{Float64}, PyArray}, Float64}
     """
     Solve the reset model and return the results. The model is always feasible.
     """

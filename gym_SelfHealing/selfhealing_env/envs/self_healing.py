@@ -7,7 +7,7 @@ import warnings
 import gymnasium as gym
 from gymnasium import spaces
 from .System_Data import System_Data
-from julia import Main as jl
+from juliacall import Main as jl
 import numpy as np
 
 try:
@@ -116,7 +116,7 @@ class SelfHealing_Env(gym.Env):
             system_data.args_step -> step model and reset model
         """
         if self.opt_framework == "JuMP":
-            jl.eval("using " + self.solver) # Load solver
+            jl.seval("using " + self.solver) # Load solver
             jl.include(os.path.join(os.path.dirname(__file__),"OPF_Core.jl"))
             jl.init_opf_core(
                 args_expert=self.system_data.args_expert, args_step=self.system_data.args_step,
@@ -290,6 +290,8 @@ class SelfHealing_Env(gym.Env):
         """
         if self.opt_framework == "JuMP":
             _b, _x_tieline, _x_load, _PF, _QF, load_value_current = jl.solve_ResetModel()
+            _PF = np.array(_PF)
+            _QF = np.array(_QF)
             
         elif self.opt_framework == "Gurobipy":
             _b, _x_tieline, _x_load, _PF, _QF, load_value_current = self.core.solve_ResetModel()
@@ -301,6 +303,7 @@ class SelfHealing_Env(gym.Env):
         """---------------End of solving reset model---------------"""
         
         # Record the initial observation
+        # NOTE: Results obtained from Julia functions can be automatically converted to numpy arrays when using 'np.*' functions
         self._x_load = np.round(_x_load).astype(np.int8) # Use round to avoid numerical error
         # Returned obs. 
         branch_obs0 = np.concatenate((self.a[:,0].flatten(),_x_tieline)).astype(np.int8)
@@ -359,6 +362,12 @@ class SelfHealing_Env(gym.Env):
             if self.opt_framework == "JuMP":
                 solved_flag, expert_b, expert_x_tieline, expert_x_load, \
                     expert_Pg, expert_Qg, expert_PF, expert_QF, load_value_expert = jl.solve_ExpertModel()
+                expert_Pg = np.array(expert_Pg)
+                expert_Qg = np.array(expert_Qg)
+                expert_PF = np.array(expert_PF)
+                expert_QF = np.array(expert_QF)
+                load_value_expert = np.array(load_value_expert)
+
             elif self.opt_framework == "Gurobipy":
                 solved_flag, expert_b, expert_x_tieline, expert_x_load, \
                     expert_Pg, expert_Qg, expert_PF, expert_QF, load_value_expert = self.core.solve_ExpertModel()
@@ -373,8 +382,6 @@ class SelfHealing_Env(gym.Env):
                 expert_x_branch = np.concatenate((self.a,expert_x_tieline)).astype(np.int8)
                 expert_branch_obs = np.concatenate((branch_obs0.reshape(-1, 1),expert_x_branch[:,:-1]), axis=1).astype(np.int8)
                 expert_x_load = np.round(expert_x_load).astype(np.int8)
-                expert_PF = expert_PF
-                expert_QF = expert_QF
                 expert_P_sub = expert_Pg[0,:]
                 expert_Q_sub = expert_Qg[0,:]
                 expert_Q_svc = expert_Qg[1:,:]
@@ -512,21 +519,23 @@ class SelfHealing_Env(gym.Env):
                     X_rec0_input=self._x_load, X_tieline_input=x_tieline_input, 
                     Q_svc_input=q_svc_input, vvo=self.vvo
                 )
-                results = jl.solve_StepModel()
+                results = jl.solve_StepModel() # Record the results
+                solved, _b, _x_tieline, _x_load, _PF, _QF, load_value_new, e_Qsvc = results
+                _PF = np.array(_PF)
+                _QF = np.array(_QF)
+                
             elif self.opt_framework == "Gurobipy":
                 self.core.set_StepModel(
                     X_rec0_input=self._x_load, X_tieline_input=x_tieline_input, 
                     Q_svc_input=q_svc_input, vvo=self.vvo
                 )
                 results = self.core.solve_StepModel()
+                solved, _b, _x_tieline, _x_load, _PF, _QF, load_value_new, e_Qsvc = results
             else:
                 #NOTE Add other optimization frameworks here.
                 raise Exception("Optimization framework not supported!")
             """-------------------End of setting & solving step model-------------------"""
    
-            # Record the results
-            solved, _b, _x_tieline, _x_load, _PF, _QF, load_value_new, e_Qsvc = results
-            
             # If infeasible, it means the tieline cannot be closed,
             # the tieline status remains unchanged, and the load will not be recovered
             #NOTE: 'Soft-constraint' technologies are employed to distinguish different events
