@@ -6,10 +6,13 @@ from typing import Tuple, Optional
 
 import gymnasium as gym
 import numpy as np
+
+import selfhealing_env
+
+# Torch should be imported after juliacall
 import torch
 import torch.nn.functional as F
 
-import selfhealing_env
 ## --In case of import error when you have to use python-jl to run the code, please use the following import statement--
 import sys
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -199,8 +202,11 @@ class TrainManager():
             self.buffer.append(item) # append data to buffer
         
         for _ in range(self.train_iterations):
-            obs_batch, action_batch = self.buffer.sample(batch_size=self.batch_size) # sample data
-            self.agent.learn(obs_batch,action_batch)
+            sample_indices = np.random.randint(low=0,
+                                            high=len(self.buffer),
+                                            size=self.batch_size) # sample data
+            obs_all, action_all = self.buffer.fetch_all(shuffle=True)
+            self.agent.learn(obs_all[sample_indices],action_all[sample_indices])
        
     def test(self) -> None:
         options = {
@@ -311,7 +317,7 @@ if __name__ == "__main__":
         env=env,
         log_output_path = log_output_path,
         episode_num=args.train_epochs,
-        train_iterations=args.DAgger_update_iters,
+        train_iterations=args.IL_update_iters,
         batch_size=args.IL_batch_size,
         lr=args.IL_lr,
         test_iterations=args.test_iterations, 

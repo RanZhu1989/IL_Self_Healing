@@ -7,10 +7,12 @@ from typing import Tuple, Optional
 
 import gymnasium as gym
 import numpy as np
-import torch
-import torch.nn.functional as F
 
 import selfhealing_env
+
+# Torch should be imported after juliacall
+import torch
+import torch.nn.functional as F
 ## --In case of import error when you have to use python-jl to run the code, please use the following import statement--
 import sys
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -171,9 +173,11 @@ class TrainManager():
         log_output_path:Optional[str]=None,
         lr:float = 0.001,
         training_epochs:int = 500,
-        expert_sample_used:int = 50, # use # samples to train the agent
+        expert_episode_used:int = 100,
+        expert_sample_used:int = 50,
         buffer_capacity:int = 1000000,
         batch_size:int = 32,
+        train_iters:int = 5,
         test_iterations:int = 5,
         device:torch.device = torch.device("cpu"),
         seed:Optional[int] = None
@@ -209,6 +213,8 @@ class TrainManager():
                                     self.continuous_action_dim).to(self.device) for _ in range(self.discrete_action_dim)]
         continuous_optimizers = [torch.optim.Adam(net.parameters(), lr=lr) for net in continuous_policy_networks]
         self.training_epochs = training_epochs
+        self.train_iters = train_iters
+        self.expert_episode_used = expert_episode_used
         self.expert_sample_used = expert_sample_used
         self.batch_size = batch_size
         self.log_output_path = log_output_path
@@ -244,8 +250,8 @@ class TrainManager():
             "External_RNG":None
             }
         sampled_idx = 0
-        with tqdm(total=self.expert_sample_used, desc='Collecting Expert Data') as pbar:
-            while sampled_idx < self.expert_sample_used:
+        with tqdm(total=self.expert_episode_used, desc='Collecting Expert Data') as pbar:
+            while sampled_idx < self.expert_episode_used:
                 # Ensure that the env has a solution
                 while True:
                     _, info = self.env.reset(options=options)
@@ -262,16 +268,28 @@ class TrainManager():
                     self.buffer.append(item) # append data to buffer
                 pbar.update(1)
                 
+        Xd, Yd, Xc, Yc = self.buffer.sample(batch_size=self.expert_sample_used,shuffle=True)
+                
         # 2. Train the agent     
         with tqdm(total=self.training_epochs, desc='BC Training') as pbar:
             for e in range(self.training_epochs):
-                Xd_batch, Yd_batch, Xc_batch, Yc_batch = self.buffer.sample(batch_size=self.batch_size,shuffle=True)
-                # Discrete policy learning
-                self.agent.train_discrete(Xd_batch, Yd_batch)
-                # Continuous policy learning
-                indices = find_1Dtensor_value_indices(Yd_batch, self.discrete_action_dim)
-                for idx in range(self.discrete_action_dim):
-                    self.agent.train_continuous(Xc_batch[indices[idx],:], Yc_batch[indices[idx],:], idx)
+                for _ in range(self.train_iters):
+                    sample_indices = np.random.randint(low=0,
+                                            high=Xd.shape[0],
+                                            size=self.batch_size)
+                    Xd_batch = Xd[sample_indices]
+                    Yd_batch = Yd[sample_indices]
+                    Xc_batch = Xc[sample_indices]
+                    Yc_batch = Yc[sample_indices]
+                    # Discrete policy learning
+                    self.agent.train_discrete(Xd_batch, Yd_batch)
+                    # Continuous policy learning
+                    indices = find_1Dtensor_value_indices(Yd_batch, self.discrete_action_dim)
+                    for idx in range(self.discrete_action_dim):
+                        self.agent.train_continuous(Xc_batch[indices[idx],:], Yc_batch[indices[idx],:], idx)
+                    
+                    pass
+                
                 self.logger.event_logger.info(
                     f"=============== Epoch {e+1:d} of {self.training_epochs:d} ================="
                 )
@@ -395,8 +413,10 @@ if __name__ == "__main__":
         env=env,
         log_output_path = log_output_path,
         training_epochs=args.train_epochs,
+        expert_episode_used=args.IL_used_episodes,
         expert_sample_used=args.IL_used_samples,
         batch_size=args.IL_batch_size,
+        train_iters = args.IL_update_iters,
         lr=args.IL_lr,
         test_iterations=args.test_iterations, 
         device=device,

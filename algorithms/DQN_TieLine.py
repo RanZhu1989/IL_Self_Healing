@@ -8,12 +8,15 @@ import copy
 
 import gymnasium as gym
 import numpy as np
-import torch
-import torch.nn.functional as F
 from matplotlib import pyplot as plt
 import pandas as pd
 
 import selfhealing_env
+
+# Torch should be imported after juliacall
+import torch
+import torch.nn.functional as F
+
 ## --In case of import error when you have to use python-jl to run the code, please use the following import statement--
 import sys
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))

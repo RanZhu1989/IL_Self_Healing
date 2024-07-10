@@ -22,23 +22,26 @@ parser.add_argument('--forced_cpu', type=bool,default=False)
 parser.add_argument('--seed', type=int, default=0)
 parser.add_argument('--test_iterations', type=int, default=5)
 parser.add_argument('--train_epochs', type=int, default=500)
+parser.add_argument('--on_policy_env_iters', type=int,default=20)
 
 
 # Imitation learning parameters
 parser.add_argument('--IL_lr', type=float,default=1.0e-3)
-parser.add_argument('--IL_batch_size', type=int,default=32)
-parser.add_argument('--IL_used_samples', type=int,default=500)
-parser.add_argument('--DAgger_update_iters', type=int,default=5)
+parser.add_argument('--IL_batch_size', type=int,default=16)
+parser.add_argument('--IL_used_episodes', type=int,default=200)
+parser.add_argument('--IL_used_samples', type=int,default=100)
+parser.add_argument('--IL_update_iters', type=int,default=5)
 parser.add_argument('--GAIL_d_iters',type=int, default=5)
 parser.add_argument('--GAIL_d_lr', type=float,default=1.0e-3)
 
 # PPO parameters
 parser.add_argument('--PPO_actor_lr', type=float,default=1.0e-3)
-parser.add_argument('--PPO_critic_lr',type=float, default=1.0e-2)
+parser.add_argument('--PPO_critic_lr',type=float, default=5.0e-3)
 parser.add_argument('--PPO_gamma', type=float,default=0.98)
 parser.add_argument('--PPO_advantage_lambda', type=float,default=0.95)
 parser.add_argument('--PPO_clip_epsilon', type=float,default=0.2)
-parser.add_argument('--PPO_train_iters', type=int,default=100)
+parser.add_argument('--PPO_train_iters', type=int,default=10)
+
 
 # DQN parameters
 parser.add_argument('--DQN_lr', type=float,default=1.0e-3)

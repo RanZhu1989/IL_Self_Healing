@@ -5,8 +5,22 @@
 
 # Recast Code of the Paper ['Hybrid Imitation Learning for Real-Time Service Restoration in Resilient Distribution Systems'](https://ieeexplore.ieee.org/document/9424985)
 
+Please use this bibtex if you want to cite this repository in your publications:
+
+    @misc{IL_Self_Healing,
+      author = {Ran Zhu},
+      title = {Recast Code of the Paper 'Hybrid Imitation Learning for Real-Time Service Restoration in Resilient Distribution Systems'},
+      year = {2023},
+      publisher = {GitHub},
+      journal = {GitHub repository},
+      howpublished = {\url{https://github.com/RanZhu1989/IL_Self_Healing}},
+    }
+
+## Thanks
+Thanks to the authors of the original paper for their valuable research and [code](https://github.com/whoiszyc/IntelliHealer) on Github.
+
 ## Abstract
-This is the reproduced code for the paper titled "Hybrid Imitation Learning for Real-Time Service Restoration in Resilient Distribution Systems". Compared to the original code, this recast code has the following updates:
+This is the reproduced code for the paper titled "Hybrid Imitation Learning for Real-Time Service Restoration in Resilient Distribution Systems". Compared to the [original code](https://github.com/whoiszyc/IntelliHealer), this recast code has the following updates:
 
 |              | This repository      | Original     
 |--------------|--------------|--------------| 
@@ -16,6 +30,18 @@ This is the reproduced code for the paper titled "Hybrid Imitation Learning for 
 | **Running speed**    | ~500% UP | 100% |
 
 The so-called behavior cloning (BC) algorithm in origin paper is actually the data augmentation (DAgger) algorithm. I have corrected this in the recast code.
+
+## Reproduction Results
+In general, the recast code reproduces the results in the original paper. The following figures show the success ratio of the proposed algorithm in different scenarios. There are some points slight larger than 1, which is due to numerical issues.
+### N-1 Test (Fig. 5 and 11)
+![N_1](/pics/N-1_Success_Ratio.png)
+
+### N-2 Test (Fig. 12)
+![N_2](/pics/N-2_Success_Ratio.png)
+
+### N-5 Test (Fig. 6)
+![N_5](/pics/N-5_Success_Ratio.png)
+
 ## Getting started
 - Install python environment, `cd` into the gym environment directory `./gym_SelfHealing/` and type `pip install -e .`
 - Install Julia environment, add the following packages: `JuMP`, `PythonCall`

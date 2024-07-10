@@ -6,10 +6,13 @@ from typing import Tuple, Optional
 
 import gymnasium as gym
 import numpy as np
+
+import selfhealing_env
+
+# Torch should be imported after juliacall
 import torch
 import torch.nn.functional as F
 
-import selfhealing_env
 ## --In case of import error when you have to use python-jl to run the code, please use the following import statement--
 import sys
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -267,8 +270,14 @@ class TrainManager():
             self.buffer.append(item) # append data to buffer
         
         for _ in range(self.train_iterations):
-            # obs_batch, action_batch = self.buffer.sample(batch_size=self.batch_size) # sample data
-            Xd_batch, Yd_batch, Xc_batch, Yc_batch = self.buffer.fetch_all() # fetch all data
+            sample_indices = np.random.randint(low=0,
+                                            high=len(self.buffer),
+                                            size=self.batch_size) # sample data
+            Xd_all, Yd_all, Xc_all, Yc_all = self.buffer.fetch_all(shuffle=True) # fetch all data
+            Xd_batch = Xd_all[sample_indices]
+            Yd_batch = Yd_all[sample_indices]
+            Xc_batch = Xc_all[sample_indices]
+            Yc_batch = Yc_all[sample_indices]
             # Discrete policy learning
             self.agent.train_discrete(Xd_batch, Yd_batch)
             # Continuous policy learning
@@ -390,7 +399,7 @@ if __name__ == "__main__":
         env=env,
         log_output_path = log_output_path,
         episode_num=args.train_epochs,
-        train_iterations=args.DAgger_update_iters,
+        train_iterations=args.IL_update_iters,
         lr=args.IL_lr,
         test_iterations=args.test_iterations,
         device=device,

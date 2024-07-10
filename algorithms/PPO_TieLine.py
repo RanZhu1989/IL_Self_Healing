@@ -1,18 +1,19 @@
 import os
-import time
 import random
 from tqdm import tqdm
 from typing import Tuple, Optional
-import copy
 
 import gymnasium as gym
 import numpy as np
-import torch
-import torch.nn.functional as F
 from matplotlib import pyplot as plt
 import pandas as pd
 
 import selfhealing_env
+
+# Torch should be imported after juliacall
+import torch
+import torch.nn.functional as F
+
 ## --In case of import error when you have to use python-jl to run the code, please use the following import statement--
 import sys
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -32,6 +33,7 @@ class PPO_Clip_Agent():
         advantage_lambda:float = 0.95, # Discount factor for advantage function
         clip_epsilon:float = 0.2, # Clipping parameter
         train_iters:int = 10, # Number of iterations to train the policy in each episode
+        batch_size:int = 16, # Batch size for training
         device:torch.device = torch.device("cpu")
     ) -> None:
         
@@ -43,6 +45,7 @@ class PPO_Clip_Agent():
         self.critic_optimizer = critic_optimizer              
         self.clip_epsilon = clip_epsilon
         self.train_iters = train_iters
+        self.batch_size = batch_size
         self.gamma = gamma
         self.advantage_lambda = advantage_lambda
         
@@ -78,28 +81,36 @@ class PPO_Clip_Agent():
         return advantage
     
     def train_policy(self) -> None:
-        obs, action, reward, next_obs , done, = self.episode_recorder.get_trajectory()
+        obs, action, reward, next_obs , done = self.episode_recorder.get_trajectory()
+        
+        # Data preparation
+        # 1. TD_target = r + gamma * V(s')
         TD_target = reward + self.gamma * self.critic_network(next_obs) * (1 - done)
         TD_error = TD_target - self.critic_network(obs)
+        # 2. Advantage 
         advantage = self.calculate_advantage(TD_error)
-        
+        # 3. Log_prob
         old_log_prob = self.calculate_log_prob(obs,action).detach() # Freeze the log_prob obtained by the current policy
-        
+        # Update the policy by batch
         for _ in range(self.train_iters):
-            critic_loss = torch.mean(F.mse_loss(TD_target.detach(), self.critic_network(obs)))
+            sample_indices = np.random.randint(low=0,
+                                            high=obs.shape[0],
+                                            size=self.batch_size)
+            
+            critic_loss = torch.mean(F.mse_loss(TD_target[sample_indices].detach(), self.critic_network(obs[sample_indices])))
             self.critic_optimizer.zero_grad()
             critic_loss.backward()
             self.critic_optimizer.step()
             
-            log_prob = self.calculate_log_prob(obs, action)
-            ratio = torch.exp(log_prob - old_log_prob) # pi_theta / pi_theta_old
-            clipped_ratio = torch.clamp(ratio, 1 - self.clip_epsilon, 1 + self.clip_epsilon)
-            actor_loss = torch.mean(-torch.min(ratio * advantage, clipped_ratio * advantage))
+            log_prob = self.calculate_log_prob(obs[sample_indices], action[sample_indices])
+            ratio = torch.exp(log_prob - old_log_prob[sample_indices]) # pi_theta / pi_theta_old
+            clipped_ratio = torch.clamp(ratio, 1-self.clip_epsilon, 1+self.clip_epsilon)
+            actor_loss = torch.mean(-torch.min(ratio * advantage[sample_indices], clipped_ratio * advantage[sample_indices]))
             self.actor_optimizer.zero_grad()
             actor_loss.backward()
             self.actor_optimizer.step()
         
-            
+
 class Actor_Network(torch.nn.Module):
 
     def __init__(
@@ -108,27 +119,32 @@ class Actor_Network(torch.nn.Module):
         action_dim:int
     ) -> None:
         super(Actor_Network, self).__init__()
-        self.fc1 = torch.nn.Linear(obs_dim,64)
-        self.fc2 = torch.nn.Linear(64,action_dim)
+        self.fc1 = torch.nn.Linear(obs_dim, 64)
+        self.fc2 = torch.nn.Linear(64, 128)
+        self.fc3 = torch.nn.Linear(128, 64)
+        self.fc4 = torch.nn.Linear(64, action_dim)
                     
-    def forward(self,x:torch.tensor) -> torch.tensor:
+    def forward(self, x:torch.tensor) -> torch.tensor:
         x = F.relu(self.fc1(x))
-        x = self.fc2(x)
-        x = F.softmax(x, dim = -1)
+        x = F.relu(self.fc2(x))
+        x = F.relu(self.fc3(x))
+        return torch.softmax(self.fc4(x), dim=-1)
                 
-        return x
-  
     
 class Critic_Network(torch.nn.Module):
 
     def __init__(self,obs_dim:int) -> None:
         super(Critic_Network, self).__init__()
         self.fc1 = torch.nn.Linear(obs_dim,64)
-        self.fc2 = torch.nn.Linear(64,1)
+        self.fc2 = torch.nn.Linear(64,128)
+        self.fc3 = torch.nn.Linear(128,64)
+        self.fc4 = torch.nn.Linear(64,1)
                     
     def forward(self,x:torch.tensor) -> torch.tensor:
         x = F.relu(self.fc1(x))
-        x = self.fc2(x)
+        x = F.relu(self.fc2(x))
+        x = F.relu(self.fc3(x))
+        x = self.fc4(x)
                 
         return x
 
@@ -190,6 +206,7 @@ class TrainManager():
         advantage_lambda:float = 0.95,
         clip_epsilon:float = 0.2,
         train_iters:int = 10, 
+        batch_size:int = 16,
         seed = 0,
         my_device = "cpu"
     ) -> None:
@@ -229,6 +246,7 @@ class TrainManager():
             advantage_lambda = advantage_lambda,
             clip_epsilon = clip_epsilon,
             train_iters = train_iters,
+            batch_size = batch_size,
             device = self.device
         )
                                             
@@ -257,13 +275,11 @@ class TrainManager():
         return total_reward
     
     def train(self) -> None:
-        tic = time.perf_counter()  # start clock
         with tqdm(total=self.episode_num, desc='Training') as pbar:
             for e in range(self.episode_num):
                 episode_reward = self.train_episode()
                 self.test()
-                toc = time.perf_counter()
-                pbar.set_postfix({"Training time": f"{toc - tic:0.2} seconds", "Return": (episode_reward)})
+                pbar.set_postfix({"Return": (episode_reward)})
                 pbar.update(1)
             
     def test(self) -> None:
@@ -360,12 +376,12 @@ if __name__ == "__main__":
     
     env = gym.make(
         "SelfHealing-v0",
-        opt_framework="JuMP",
-        solver="cplex",
+        opt_framework="Gurobipy",
+        solver="gurobi",
         data_file="Case_33BW_Data.xlsx",
         solver_display=False,
-        min_disturbance=2,
-        max_disturbance=2,
+        min_disturbance=1,
+        max_disturbance=1,
         vvo=False,
         Sb=100,
         V0=1.05,
@@ -383,7 +399,8 @@ if __name__ == "__main__":
         gamma = 0.98,
         advantage_lambda = 0.95,
         clip_epsilon = 0.2,
-        train_iters = 10, 
+        train_iters = 10,
+        batch_size = 2, 
         seed = 0,
         my_device = "cpu" 
     )
