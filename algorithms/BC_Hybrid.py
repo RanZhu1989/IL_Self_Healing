@@ -10,13 +10,8 @@ import numpy as np
 
 import selfhealing_env
 
-# Torch should be imported after juliacall
 import torch
 import torch.nn.functional as F
-## --In case of import error when you have to use python-jl to run the code, please use the following import statement--
-import sys
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-# --------------------------------------------------------------------------------------------------------------
 from utils import logger, check_cuda, get_time, find_1Dtensor_value_indices
 from configs import args
 
@@ -332,8 +327,8 @@ class TrainManager():
             # Calculate performance using agent policy           
             agent_info = None
             agent_load_rate = []
-            for step in self.env.exploration_seq_idx:
-                s_top_0 = np.reshape(s0["X_branch"], (-1, self.env.system_data.N_Branch))
+            for step in self.env.unwrapped.exploration_seq_idx:
+                s_top_0 = np.reshape(s0["X_branch"], (-1, self.env.unwrapped.system_data.N_Branch))
                 a_tieline = self.agent.predict_discrete(s_top_0)
                 a_tieline = int(a_tieline.item())
                 s_pqf_0 = np.concatenate((s0["PF"], s0["QF"]), axis=0)

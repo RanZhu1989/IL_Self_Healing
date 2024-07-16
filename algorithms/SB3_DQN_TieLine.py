@@ -11,10 +11,6 @@ from stable_baselines3 import DQN
 from stable_baselines3.common.callbacks import BaseCallback
 
 import selfhealing_env
-## --In case of import error when you have to use python-jl to run the code, please use the following import statement--
-import sys
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-# --------------------------------------------------------------------------------------------------------------
 from utils import logger
 
 class TrainManager():
@@ -42,7 +38,7 @@ class TrainManager():
         self.seed = seed
         self.test_rng = random.Random(self.seed)
         self.episode_num = episode_num
-        self.time_steps = self.env.system_data.NT
+        self.time_steps = self.unwrapped.env.system_data.NT
         self.log_output_path = log_output_path
         self.test_iterations = test_iterations
         
@@ -98,8 +94,8 @@ class TrainManager():
             # Calculate performance using agent policy           
             agent_info = None
             agent_load_rate = []
-            for step in self.env.exploration_seq_idx:
-                s0 = np.reshape(s0, (-1, self.env.system_data.N_Branch))
+            for step in self.env.unwrapped.exploration_seq_idx:
+                s0 = np.reshape(s0, (-1, self.unwrapped.env.system_data.N_Branch))
                 a, _ = self.agent.predict(s0)
                 self.logger.event_logger.info("Given state S[{}] = {}".format(step, s0[0]))
                 self.logger.event_logger.info("Agent action at S[{}] is A[{}] = {}".format(step, step+1, a))

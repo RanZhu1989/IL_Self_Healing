@@ -10,14 +10,9 @@ import pandas as pd
 
 import selfhealing_env
 
-# Torch should be imported after juliacall
 import torch
 import torch.nn.functional as F
 
-## --In case of import error when you have to use python-jl to run the code, please use the following import statement--
-import sys
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-# --------------------------------------------------------------------------------------------------------------
 from utils import logger
 
 class PPO_Clip_Agent():
@@ -314,8 +309,8 @@ class TrainManager():
             # Calculate performance using agent policy           
             agent_info = None
             agent_load_rate = []
-            for step in self.env.exploration_seq_idx:
-                s0 = np.reshape(s0, (-1, self.env.system_data.N_Branch))
+            for step in self.env.unwrapped.unwrapped.exploration_seq_idx:
+                s0 = np.reshape(s0, (-1, self.env.unwrapped.system_data.N_Branch))
                 a = self.agent.get_action(s0)
                 a = int(a)
                 self.logger.event_logger.info("Given state S[{}] = {}".format(step, s0[0]))
