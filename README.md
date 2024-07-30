@@ -27,20 +27,24 @@ This is the reproduced code for the paper titled "Hybrid Imitation Learning for 
 | **Optimization environment**    | JuMP and Gurobipy (Matrix programming) | Pymoo ('For loop' programming)| 
 | **Gymnasium standard environment**    | &#10003; | &#10007;  |
 | **Deep learning framework**    | Pytorch | Tensorflow |
-| **Running speed**    | ~500% UP | 100% |
+| **Running speed**    | ~500% Faster | 100% |
 
 The so-called behavior cloning (BC) algorithm in origin paper is actually the data augmentation (DAgger) algorithm. I have corrected this in the recast code.
 
 ## Reproduction Results
-In general, the recast code reproduces the results in the original paper. The following figures show the success ratio of the proposed algorithm in different scenarios. There are some points slight larger than 1, which is due to numerical issues.
+In general, the recast code reproduces the results in the original paper. The following figures show the success ratio of the proposed algorithm in different scenarios. 
+> There are some points slight larger than 1, which is due to numerical issues of the mathematic programming-based environment.
 ### N-1 Test (Fig. 5 and 11)
-![N_1](/pics/N-1_Success_Ratio.png)
+Superior performance of DAgger compared to the conventional BC method.
+![N_1](/pics/N-1_Success_Ratio_A.png)
+![N_1](/pics/N-1_Success_Ratio_B.png)
 
+More complex scenarios, such as N-2 and N-5 tests.
 ### N-2 Test (Fig. 12)
 ![N_2](/pics/N-2_Success_Ratio.png)
-
 ### N-5 Test (Fig. 6)
 ![N_5](/pics/N-5_Success_Ratio.png)
+> The reproduction only plays a few epochs due to the long training time. Since the trend is consistent with the original paper, the reproduction is considered successful.
 
 ## Getting started
 - Install python environment, `cd` into the gym environment directory `./gym_SelfHealing/` and type `pip install -e .`

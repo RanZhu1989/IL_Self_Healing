@@ -1,5 +1,6 @@
 """Core OPF models for SelfHealingEnv using Gurobipy"""
-from typing import Optional, Tuple 
+from typing import Optional, Tuple
+ 
 import numpy as np
 import gurobipy as gp
 from gurobipy import GRB

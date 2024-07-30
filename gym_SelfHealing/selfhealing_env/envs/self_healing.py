@@ -1,6 +1,5 @@
 """Gym entry point for SelfHealing_Env environment."""
 import os
-import random
 from typing import Optional, Tuple, Union 
 import warnings
 
