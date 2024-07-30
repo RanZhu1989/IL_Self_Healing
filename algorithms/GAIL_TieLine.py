@@ -14,7 +14,6 @@ import pandas as pd
 
 import selfhealing_env
 from utils import logger, check_cuda, get_time
-from configs import args
 
 
 class Episode_Recorder():
@@ -609,18 +608,18 @@ if __name__ == "__main__":
     parser.add_argument('--result_folder_name', type=str, default='results')
     parser.add_argument('--forced_cpu', type=bool, default=False)
     parser.add_argument('--seed', type=int, default=0)
-    parser.add_argument('--test_iterations', type=int, default=5)
-    parser.add_argument('--train_epochs', type=int, default=1000)
+    parser.add_argument('--test_iterations', type=int, default=10)
+    parser.add_argument('--train_epochs', type=int, default=10000)
     # GAIL parameters
-    parser.add_argument('--used_exp_episodes', type=int, default=300)
-    parser.add_argument('--used_exp_samples', type=int, default=500)
+    parser.add_argument('--used_exp_episodes', type=int, default=500)
+    parser.add_argument('--used_exp_samples', type=int, default=1000)
     parser.add_argument('--GAIL_d_iters', type=int, default=5)
-    parser.add_argument('--GAIL_d_batch_size', type=int, default=32)
-    parser.add_argument('--GAIL_d_lr', type=float, default=5.0e-3)
+    parser.add_argument('--GAIL_d_batch_size', type=int, default=64)
+    parser.add_argument('--GAIL_d_lr', type=float, default=1.0e-3)
     # PPO (actor)
     parser.add_argument('--on_policy_env_iters', type=int, default=20)
     parser.add_argument('--PPO_actor_lr', type=float, default=1.0e-2)
-    parser.add_argument('--PPO_critic_lr', type=float, default=5.0e-3)
+    parser.add_argument('--PPO_critic_lr', type=float, default=1.0e-3)
     parser.add_argument('--PPO_gamma', type=float, default=0.98)
     parser.add_argument('--PPO_advantage_lambda', type=float, default=0.95)
     parser.add_argument('--PPO_clip_epsilon', type=float, default=0.2)
@@ -647,8 +646,6 @@ if __name__ == "__main__":
     log_output_path = current_path + "/" + args.result_folder_name + "/" + task_name + \
                     ("_n_" + str(args.min_disturbance) + "to" + str(args.max_disturbance)
                         + "_" + get_time() + "/" )
-
-    tensorboard_path = log_output_path + "tensorboard/"
 
     if args.forced_cpu:
         device = torch.device("cpu")
