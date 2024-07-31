@@ -10,7 +10,7 @@ import numpy as np
 
 try:
     from juliacall import Main as jl
-except ImportError:
+except Exception:
     warning_msg = "Julia env support is not available: Importing JuliaCall failed."
     warnings.warn(warning_msg)
     ERROR_JULIA = True
