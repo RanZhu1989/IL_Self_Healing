@@ -6,16 +6,28 @@ import warnings
 import gymnasium as gym
 from gymnasium import spaces
 from .System_Data import System_Data
-from juliacall import Main as jl
 import numpy as np
+
+try:
+    from juliacall import Main as jl
+except ImportError:
+    warning_msg = "Julia env support is not available: Importing JuliaCall failed."
+    warnings.warn(warning_msg)
+    ERROR_JULIA = True
+else:
+    ERROR_JULIA = False
 
 try:
     from .OPF_Core import OPF_Core
 except ImportError:
     warning_msg = "Gurobipy env support is not available: Importing Gurobipy failed."
     warnings.warn(warning_msg)
+    ERROR_GUROBI = True
 else:
-    pass
+    ERROR_GUROBI = False
+
+if ERROR_JULIA and ERROR_GUROBI:
+    raise Exception("No optimization framework is available. Please install JuliaCall or Gurobipy.")
 
     
 class SelfHealing_Env(gym.Env):
